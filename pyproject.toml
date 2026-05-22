@@ -19,7 +19,9 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 
-# Base install has no runtime dependencies yet — `yertle-client` arrives in the next slice.
+dependencies = [
+    "yertle-client>=0.0.1",
+]
 
 [project.optional-dependencies]
 cli = ["typer>=0.12", "rich>=13.7"]
@@ -37,6 +39,12 @@ yertle = "yertle.cli.main:app"
 Homepage = "https://github.com/model-context/yertle-python"
 Repository = "https://github.com/model-context/yertle-python"
 Issues = "https://github.com/model-context/yertle-python/issues"
+
+# Path dep during development — consumes the in-progress yertle-client package
+# from the sibling backend repo. Switched to a PyPI version dep once yertle-client
+# is published (after PAT auth slice lands).
+[tool.uv.sources]
+yertle-client = { path = "../yertle/clients/python", editable = true }
 
 [build-system]
 requires = ["hatchling"]
@@ -85,6 +93,12 @@ extraPaths = ["."]
 pythonVersion = "3.11"
 typeCheckingMode = "strict"
 reportMissingTypeStubs = false
+# Typer's Option/Argument overloads return `Any`, which trips strict-mode
+# reportUnknownMemberType / reportUnknownVariableType on every CLI command.
+# Same pragmatic loosening yertle-sre uses for LangChain interop.
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportUnknownArgumentType = false
 
 executionEnvironments = [
     { root = "tests", reportMissingParameterType = "none", reportUnknownParameterType = "none", reportUnknownLambdaType = "none" },
