@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Pyright
+.pyright/
+
+# macOS
+.DS_Store
