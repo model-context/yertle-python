@@ -30,10 +30,14 @@ def test_token_env_alone_defaults_to_prod_url(
     _clear_env(monkeypatch)
     monkeypatch.setenv("YERTLE_TOKEN", "yrt_abc")
 
-    with patch.object(auth_mod, "client_from_token") as mock_factory:
+    with patch.object(auth_mod, "AuthenticatedClient") as mock_factory:
         auth_mod.get_client()
 
-    mock_factory.assert_called_once_with(token="yrt_abc", base_url=auth_mod.DEFAULT_API_URL)
+    mock_factory.assert_called_once_with(
+        base_url=auth_mod.DEFAULT_API_URL,
+        token="yrt_abc",
+        raise_on_unexpected_status=True,
+    )
 
 
 def test_both_env_vars_take_precedence_over_config(
@@ -46,10 +50,12 @@ def test_both_env_vars_take_precedence_over_config(
     monkeypatch.setenv("YERTLE_TOKEN", "env-token")
     monkeypatch.setenv("YERTLE_API_URL", "https://env.example")
 
-    with patch.object(auth_mod, "client_from_token") as mock_factory:
+    with patch.object(auth_mod, "AuthenticatedClient") as mock_factory:
         auth_mod.get_client()
 
-    mock_factory.assert_called_once_with(token="env-token", base_url="https://env.example")
+    mock_factory.assert_called_once_with(
+        base_url="https://env.example", token="env-token", raise_on_unexpected_status=True
+    )
 
 
 def test_env_token_overrides_config_token_but_url_falls_back(
@@ -65,10 +71,12 @@ def test_env_token_overrides_config_token_but_url_falls_back(
     _clear_env(monkeypatch)
     monkeypatch.setenv("YERTLE_TOKEN", "env-token")  # only token set
 
-    with patch.object(auth_mod, "client_from_token") as mock_factory:
+    with patch.object(auth_mod, "AuthenticatedClient") as mock_factory:
         auth_mod.get_client()
 
-    mock_factory.assert_called_once_with(token="env-token", base_url="http://localhost:8000")
+    mock_factory.assert_called_once_with(
+        base_url="http://localhost:8000", token="env-token", raise_on_unexpected_status=True
+    )
 
 
 def test_config_only(
@@ -80,10 +88,12 @@ def test_config_only(
 
     _clear_env(monkeypatch)
 
-    with patch.object(auth_mod, "client_from_token") as mock_factory:
+    with patch.object(auth_mod, "AuthenticatedClient") as mock_factory:
         auth_mod.get_client()
 
-    mock_factory.assert_called_once_with(token="cfg-token", base_url="https://cfg.example")
+    mock_factory.assert_called_once_with(
+        base_url="https://cfg.example", token="cfg-token", raise_on_unexpected_status=True
+    )
 
 
 def test_raises_auth_error_when_nothing_set(

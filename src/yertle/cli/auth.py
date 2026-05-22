@@ -4,7 +4,6 @@ import json
 import os
 from pathlib import Path
 
-from yertle_client.auth import client_from_token
 from yertle_client.client import AuthenticatedClient
 
 CONFIG_PATH = Path.home() / ".yertle" / "config.json"
@@ -50,4 +49,12 @@ def get_client() -> AuthenticatedClient:
 
     api_url = os.environ.get("YERTLE_API_URL") or cfg.get("api_url") or DEFAULT_API_URL
 
-    return client_from_token(token=token, base_url=api_url)
+    # `raise_on_unexpected_status=True`: the generated client returns `None`
+    # on any non-documented status (e.g. 401). We'd rather surface the real
+    # status to the user than silently get `None` back — see the CLI's error
+    # handler which includes the base_url in its message.
+    return AuthenticatedClient(
+        base_url=api_url,
+        token=token,
+        raise_on_unexpected_status=True,
+    )
