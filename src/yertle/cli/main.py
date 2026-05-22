@@ -9,7 +9,7 @@ from yertle_client.api.organizations import list_organizations_orgs_get
 from yertle_client.models import OrganizationListResponse
 
 from yertle import __version__
-from yertle.cli.auth import CONFIG_PATH, get_client, save_credentials
+from yertle.cli.auth import CONFIG_PATH, AuthError, get_client, save_credentials
 
 app = typer.Typer(
     name="yertle",
@@ -39,8 +39,7 @@ def login(
 ) -> None:
     """Save API credentials to ~/.yertle/config.json."""
     typer.echo(
-        f"Generate a token at {api_url.rstrip('/')}/settings/tokens "
-        "(PAT support coming soon — a JWT works today).",
+        f"Generate a personal access token at {api_url.rstrip('/')}/settings, then paste it below.",
     )
     token = typer.prompt("Token", hide_input=True)
     save_credentials(api_url=api_url, token=token)
@@ -57,7 +56,13 @@ def orgs(
     ),
 ) -> None:
     """List the organizations you belong to."""
-    response = list_organizations_orgs_get.sync(client=get_client())
+    try:
+        client = get_client()
+    except AuthError as e:
+        typer.secho(str(e), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from None
+
+    response = list_organizations_orgs_get.sync(client=client)
     if not isinstance(response, OrganizationListResponse):
         typer.secho(f"Unexpected response: {response!r}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1)
