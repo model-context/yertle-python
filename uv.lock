@@ -474,7 +474,7 @@ provides-extras = ["cli", "dev"]
 
 [[package]]
 name = "yertle-client"
-version = "0.0.1"
+version = "0.1.0"
 source = { editable = "../yertle/clients/python" }
 dependencies = [
     { name = "attrs" },

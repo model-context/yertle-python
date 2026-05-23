@@ -20,7 +20,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "yertle-client>=0.0.1",
+    "yertle-client>=0.1.0",
 ]
 
 [project.optional-dependencies]
