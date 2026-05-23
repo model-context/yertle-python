@@ -35,6 +35,10 @@ sre = [
     "python-dotenv>=1.0",
     "yertle[cli]",
 ]
+mcp = [
+    "fastmcp>=2.0",
+    "httpx>=0.27",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
@@ -46,6 +50,7 @@ dev = [
 [project.scripts]
 yertle = "yertle.cli.main:app"
 yertle-sre = "yertle.sre.cli:app"
+yertle-mcp = "yertle.mcp.server:main"
 
 [project.urls]
 Homepage = "https://github.com/model-context/yertle-python"
