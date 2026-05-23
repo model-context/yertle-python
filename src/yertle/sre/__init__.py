@@ -5,10 +5,7 @@ try:
 except ImportError as _e:
     import sys
 
-    sys.exit(
-        "yertle-sre requires the [sre] extra. "
-        "Install with: pip install 'yertle[sre]'"
-    )
+    sys.exit("yertle-sre requires the [sre] extra. Install with: pip install 'yertle[sre]'")
 
 from yertle.sre.agent import build_agent
 from yertle.sre.config import Settings
