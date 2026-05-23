@@ -26,6 +26,23 @@ test: ## Run the test suite
 
 check: lint format-check typecheck test ## Run every check CI runs
 
+# ---------------------------------------------------------------------------
+# SRE agent passthroughs (require `uv sync --extra sre`)
+# ---------------------------------------------------------------------------
+ask: ## Ask the agent a one-shot question (usage: make ask Q="your question")
+	@if [ -z "$(strip $(Q))" ]; then \
+	  echo 'Usage: make ask Q="your question"' >&2; \
+	  echo '       (the Q= prefix is required — make treats unquoted args as targets)' >&2; \
+	  exit 2; \
+	fi
+	@uv run yertle-sre ask "$(Q)"
+
+repl: ## Start the interactive SRE REPL
+	uv run yertle-sre repl
+
+status: ## Show auth/connection status for all underlying CLIs (SRE)
+	uv run yertle-sre status
+
 precommit: ## Install pre-commit hooks
 	uv run pre-commit install
 
@@ -33,4 +50,4 @@ clean: ## Remove caches and build artifacts
 	rm -rf .ruff_cache .pytest_cache .pyright build dist *.egg-info
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +
 
-.PHONY: help install lint fix format format-check typecheck test check precommit clean
+.PHONY: help install lint fix format format-check typecheck test check ask repl status precommit clean
