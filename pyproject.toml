@@ -25,8 +25,19 @@ dependencies = [
 
 [project.optional-dependencies]
 cli = ["typer>=0.12", "rich>=13.7"]
+sre = [
+    "langchain>=1.0",
+    "langchain-anthropic>=0.3.0",
+    "langchain-core>=0.3.0",
+    "langgraph>=1.0",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.4",
+    "python-dotenv>=1.0",
+    "yertle[cli]",
+]
 dev = [
     "pytest>=8.0",
+    "pytest-asyncio>=0.23",
     "ruff>=0.6",
     "pyright>=1.1.380",
     "pre-commit>=3.7",
@@ -34,6 +45,7 @@ dev = [
 
 [project.scripts]
 yertle = "yertle.cli.main:app"
+yertle-sre = "yertle.sre.cli:app"
 
 [project.urls]
 Homepage = "https://github.com/model-context/yertle-python"
@@ -99,6 +111,7 @@ reportMissingTypeStubs = false
 reportUnknownMemberType = false
 reportUnknownVariableType = false
 reportUnknownArgumentType = false
+reportDeprecated = false             # noisy from upstream LangChain **deprecated_kwargs
 
 executionEnvironments = [
     { root = "tests", reportMissingParameterType = "none", reportUnknownParameterType = "none", reportUnknownLambdaType = "none" },
@@ -110,3 +123,4 @@ executionEnvironments = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
+asyncio_mode = "auto"
