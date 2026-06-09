@@ -1,6 +1,6 @@
 # yertle (the SDK) — `import yertle`
 
-> **Status:** MVP landed 2026-05-23. Two functions, lazy default client, proves the facade shape. Wider surface lands incrementally based on real use.
+> **Status:** MVP landed 2026-05-23. Grouped-namespace public surface (`yertle.orgs.list()` style), per-resource files, `yertle.configure()` for explicit auth. Wider surface lands incrementally based on real use.
 
 ## What this is
 
@@ -9,11 +9,13 @@ The `yertle` Python package, when imported as a library, gives any Python script
 ```python
 import yertle
 
-for org in yertle.list_orgs():
+for org in yertle.orgs.list():
     print(org.name)
+
+acme = yertle.orgs.get("org-1")
 ```
 
-No client construction, no `from yertle_client.api.organizations import …`, no token wiring. The MVP exposes two functions; the surface grows as real use cases surface.
+No client construction, no `from yertle_client.api.organizations import …`, no token wiring. The MVP exposes one resource (`orgs`); the surface grows as real use cases surface.
 
 ## Two-layer pattern
 
@@ -22,8 +24,8 @@ Same shape every mature API SDK ships with (Stripe's `stripe-python`, OpenAI's `
 ```
 ┌──────────────────────────────┐
 │ yertle                       │  ← facade. Ergonomic, opinionated, small surface.
-│   list_orgs(), get_org(id),  │     This is what scripts and notebooks import.
-│   client()                   │
+│   orgs.list(), orgs.get(id), │     This is what scripts and notebooks import.
+│   client(), configure()      │
 └──────────────┬───────────────┘
                │ thin re-exports
                ▼
@@ -40,33 +42,74 @@ The facade exists to:
 
 1. **Provide a default client** that resolves credentials transparently (same `$YERTLE_TOKEN` env > `~/.yertle/config.json` > error precedence as the CLI and MCP server). No `AuthenticatedClient(...)` construction at call sites.
 2. **Unwrap container types.** The wire layer returns `OrganizationListResponse(organizations=[...], total=N)`; the facade returns the list directly. `total` is redundant with `len()` for SDK callers.
-3. **Group ergonomically over time.** Today the surface is flat (`yertle.list_orgs`); as it grows, we'd refactor toward `yertle.orgs.list()`, `yertle.nodes.get(id)` etc. The flat shape is the right starting point — it forces us to name functions well before designing namespaces.
+3. **Group resources into namespaces** (`yertle.orgs.list()` rather than a flat `yertle.list_orgs()`). Matches every mature SDK's shape and scales cleanly as the surface grows.
+
+## File layout
+
+Per-resource files; `__init__.py` is a thin re-export hub. Same shape `stripe-python` and `google-cloud-storage` use at their scale.
+
+```
+src/yertle/
+├── __init__.py    # ~25 lines: re-exports + __version__ + __all__
+├── _client.py     # default-client singleton: client(), configure(), get_client
+└── orgs.py        # list(), get(org_id)  →  yertle.orgs.list(), yertle.orgs.get(...)
+```
+
+Each new resource is its own file: `nodes.py`, `branches.py`, `search.py`, `tags.py`. `__init__.py` adds one import per resource and stays roughly the same size forever. The leading underscore on `_client.py` signals "internal plumbing, not part of the public API."
+
+The `list` function inside `orgs.py` shadows the `list` builtin within that module's scope; the return annotation references `builtins.list` explicitly to keep type-checkers happy. The shadow is only visible when editing `orgs.py` itself — invisible at the call site.
 
 ## How the MVP works
 
-`src/yertle/__init__.py`, ~70 lines including docstrings. The essential pieces:
+`src/yertle/orgs.py`, ~40 lines:
 
 ```python
+import builtins
+
 from yertle_client.api.organizations import (
     get_organization_orgs_org_id_get,
     list_organizations_orgs_get,
 )
-from yertle.cli.auth import get_client
+from yertle_client.models import OrganizationListResponse, OrganizationResponse
 
-_default_client = None
+from yertle._client import client
+
+
+def list() -> builtins.list[OrganizationResponse]:
+    response = list_organizations_orgs_get.sync(client=client())
+    if not isinstance(response, OrganizationListResponse):
+        raise RuntimeError(f"Unexpected response from orgs.list(): {response!r}")
+    return response.organizations
+
+
+def get(org_id: str) -> OrganizationResponse:
+    response = get_organization_orgs_org_id_get.sync(client=client(), org_id=org_id)
+    if not isinstance(response, OrganizationResponse):
+        raise RuntimeError(f"Unexpected response from orgs.get({org_id!r}): {response!r}")
+    return response
+```
+
+`src/yertle/_client.py`, ~40 lines, holds the default-client singleton plus `configure()`:
+
+```python
+_default_client: AuthenticatedClient | None = None
+
 
 def client() -> AuthenticatedClient:
     global _default_client
     if _default_client is None:
-        _default_client = get_client()
+        _default_client = get_client()   # resolves env > config > AuthError
     return _default_client
 
-def list_orgs() -> list[OrganizationResponse]:
-    response = list_organizations_orgs_get.sync(client=client())
-    return response.organizations
 
-def get_org(org_id: str) -> OrganizationResponse:
-    return get_organization_orgs_org_id_get.sync(client=client(), org_id=org_id)
+def configure(*, token: str, api_url: str | None = None) -> None:
+    """Bypass env/config resolution; set credentials explicitly."""
+    global _default_client
+    _default_client = AuthenticatedClient(
+        base_url=api_url or DEFAULT_API_URL,
+        token=token,
+        raise_on_unexpected_status=True,
+    )
 ```
 
 The default client is built on first call and cached. Users who want an explicit client (different token, different base URL, async) keep using the wire layer directly:
@@ -85,70 +128,70 @@ Both worlds coexist. The facade is convenience; the wire layer is escape hatch.
 
 **In:**
 
-- `yertle.list_orgs()` → `list[OrganizationResponse]`
-- `yertle.get_org(org_id)` → `OrganizationResponse`
+- `yertle.orgs.list()` → `list[OrganizationResponse]`
+- `yertle.orgs.get(org_id)` → `OrganizationResponse`
 - `yertle.client()` → cached `AuthenticatedClient` (escape hatch for advanced use)
+- `yertle.configure(token=..., api_url=...)` → set credentials explicitly, bypass env/config
 - `yertle.get_client` and `yertle.AuthenticatedClient` re-exported for explicit construction
 
 **Out (intentionally):**
 
-- Every other endpoint. The backend has 88 routes; we're not adding 88 facade functions in one PR.
+- Every other endpoint. The backend has 88 routes; we're not adding 88 facade functions in one PR. Each new resource is its own file (`nodes.py`, `branches.py`, `search.py`) plus one line in `__init__.py`.
 - Async variants (`yertle.aio.*`). Add when someone needs them.
-- Resource-grouped namespaces (`yertle.orgs.list()`). Premature with only two functions.
 - Caching, retries, pagination helpers. Premature; let real use shape them.
-- A `yertle.login()` programmatic auth call. Use the CLI's `yertle login` for that; library callers should set `$YERTLE_TOKEN` or write the config file directly.
+- A `yertle.login()` programmatic auth call that *persists* to disk. `yertle.configure(...)` covers the in-memory case; for persisted creds use the CLI's `yertle login` or set `$YERTLE_TOKEN`.
 
 ## Authentication
 
-The facade resolves credentials the same way the CLI and MCP server do, via the shared `yertle.cli.auth.get_client()` helper:
+Three paths, in order of how SDK users actually authenticate:
 
-1. `$YERTLE_TOKEN` env var (takes precedence per-key — the env can override only the token)
-2. `~/.yertle/config.json` (written by `yertle login`)
-3. `AuthError` raised if neither has a token
+1. **CI / scripts / containers** — `YERTLE_TOKEN=yrt_xxx python script.py`. Zero CLI involvement. The env-var path is the primary auth route for the SDK's main audience.
+2. **Standalone (no CLI installed)** — `yertle.configure(token="yrt_...", api_url="...")` in code. Sets the default client without touching disk; subsequent SDK calls use it.
+3. **Local dev where CLI is installed** — `yertle login` once in a terminal; SDK picks up `~/.yertle/config.json` transparently. Same shape as `boto3` reading `~/.aws/credentials` that `aws configure` wrote.
 
-URL resolution is independent:
+Resolution order (when `configure()` hasn't been called):
 
-1. `$YERTLE_API_URL` env var
-2. `api_url` from config file
-3. `https://api.yertle.com` default
+| Setting | Precedence |
+|---|---|
+| Token | `$YERTLE_TOKEN` env > `~/.yertle/config.json` > raise `AuthError` |
+| API URL | `$YERTLE_API_URL` env > config file `api_url` > `https://api.yertle.com` |
 
-So `import yertle; yertle.list_orgs()` works on any machine where the user has run `yertle login` once. In CI, `YERTLE_TOKEN=yrt_xxx python script.py` is enough — no config file needed.
+Token and URL resolve independently (per-key precedence), so `YERTLE_TOKEN=yrt_xxx` alone is sufficient in production — the URL defaults to prod. Local dev still needs to point at `localhost:8000` via env var or `yertle login --api-url ...`.
 
 ## Wider surface, when it lands
 
-The flat-namespace, one-function-per-endpoint shape will outgrow itself somewhere around 8–10 functions. At that point: refactor to resource-grouped namespaces, in one mechanical pass.
-
-Roughly:
+Each new resource follows the same recipe: one file (`nodes.py`, `branches.py`, etc.), one import in `__init__.py`, smoke tests in `tests/test_sdk.py`. Roughly:
 
 ```python
-# Today
-yertle.list_orgs()
-yertle.get_org(id)
-
-# After the next slice
 yertle.orgs.list()
 yertle.orgs.get(id)
+
 yertle.nodes.list(org_id=...)
 yertle.nodes.get(node_id)
 yertle.nodes.search(query)
 yertle.nodes.dependencies(node_id)
 yertle.nodes.dependents(node_id)
+
 yertle.branches.list(node_id)
 yertle.branches.create(node_id, name)
+
+yertle.tags.OWNER       # tag-name constants module
+yertle.tags.TIER
 ```
 
-The shape in `YERTLE_SDK_USE_CASES.md` (in the `yertle/` backend repo) — blast-radius queries, drift detection, architectural-context-for-LangGraph, architecture-policy-as-code — drives which endpoints land first. Each new function is ~5 lines of facade plus a smoke test.
+The shape in `YERTLE_SDK_USE_CASES.md` (in the `yertle/` backend repo) — blast-radius queries, drift detection, architectural-context-for-LangGraph, architecture-policy-as-code — drives which endpoints land first.
 
 ## Open questions for v0.2+
 
 - **Sync vs async surface.** Current MVP is sync. The wire layer has both. `yertle.aio.*` is the obvious place for async variants. Defer until someone asks.
-- **Default-client reset.** Today there's no way to reconfigure the default client after first use — you'd have to use the wire layer. Probably need `yertle.configure(token=..., api_url=...)` once the SDK has real users.
 - **Pagination.** Several endpoints (e.g. `list_nodes`) paginate. The facade should hide that — `yertle.nodes.list()` should iterate through pages, not return page 1. Add when we expose paginating endpoints.
+- **`yertle.login(token=...)` that persists to `~/.yertle/config.json`.** Mirrors the CLI's `yertle login`. Useful for setup scripts; defer until asked.
 - **Tag-constants module.** `yertle.tags.OWNER = "owner"`, `yertle.tags.TIER = "tier"`, etc. Soft conventions for the tag schema discussed in `YERTLE_SDK_USE_CASES.md`. Worthwhile alongside the first non-org endpoints.
+- **Class-based resources vs module-as-namespace.** The MVP uses the latter (`orgs.py` IS the namespace) with `# noqa A001`/`builtins.list` workarounds for the `list` shadow. Stripe / OpenAI / Anthropic use class wrappers (`stripe.Customer.list()` is a class method, no shadow). If the shadow proves consistently irritating to maintain or readers find `builtins.list` annotations noisy, revisit and switch to the class pattern across all resources.
 
 ## Reference
 
-- Source: `src/yertle/__init__.py`, `tests/test_sdk.py`
+- Source: `src/yertle/__init__.py`, `src/yertle/_client.py`, `src/yertle/orgs.py`, `tests/test_sdk.py`
 - Wire layer (autogenerated): the `yertle-client` package from `model-context/yertle/clients/python`
 - Use-case catalog driving prioritization: `yertle/docs/notes/features/yertle-python/YERTLE_SDK_USE_CASES.md`
 - Consolidation plan (the *why* of yertle-python): `yertle/docs/notes/features/yertle-python/CONSOLIDATE_CLIENTS_TO_PYTHON.md`

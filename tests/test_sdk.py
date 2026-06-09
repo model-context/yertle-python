@@ -11,6 +11,7 @@ import pytest
 from yertle_client.models import OrganizationListResponse, OrganizationResponse
 
 import yertle
+from yertle import _client as _client_module
 
 
 def _fake_org(org_id: str, name: str) -> OrganizationResponse:
@@ -34,15 +35,15 @@ def _fake_list() -> OrganizationListResponse:
 @pytest.fixture(autouse=True)
 def reset_default_client() -> Iterator[None]:  # pyright: ignore[reportUnusedFunction]
     """Ensure each test starts with a fresh lazy-init cache."""
-    yertle._default_client = None  # pyright: ignore[reportPrivateUsage]
+    _client_module._default_client = None  # pyright: ignore[reportPrivateUsage]
     yield
-    yertle._default_client = None  # pyright: ignore[reportPrivateUsage]
+    _client_module._default_client = None  # pyright: ignore[reportPrivateUsage]
 
 
-@patch("yertle.list_organizations_orgs_get.sync", return_value=_fake_list())
-@patch("yertle.get_client", return_value=object())
-def test_list_orgs_unwraps_to_list(_get_client, _sync):
-    orgs = yertle.list_orgs()
+@patch("yertle.orgs.list_organizations_orgs_get.sync", return_value=_fake_list())
+@patch("yertle._client.get_client", return_value=object())
+def test_orgs_list_unwraps_to_list(_get_client, _sync):
+    orgs = yertle.orgs.list()
 
     assert isinstance(orgs, list)
     assert len(orgs) == 2
@@ -50,10 +51,10 @@ def test_list_orgs_unwraps_to_list(_get_client, _sync):
     assert orgs[1].name == "Beta"
 
 
-@patch("yertle.get_organization_orgs_org_id_get.sync", return_value=_fake_org("org-1", "Acme"))
-@patch("yertle.get_client", return_value=object())
-def test_get_org_returns_single(_get_client, _sync):
-    org = yertle.get_org("org-1")
+@patch("yertle.orgs.get_organization_orgs_org_id_get.sync", return_value=_fake_org("org-1", "Acme"))
+@patch("yertle._client.get_client", return_value=object())
+def test_orgs_get_returns_single(_get_client, _sync):
+    org = yertle.orgs.get("org-1")
 
     assert org.id == "org-1"
     assert org.name == "Acme"
@@ -61,19 +62,32 @@ def test_get_org_returns_single(_get_client, _sync):
     assert _sync.call_args.kwargs["org_id"] == "org-1"
 
 
-@patch("yertle.list_organizations_orgs_get.sync", return_value=_fake_list())
-@patch("yertle.get_client", return_value=object())
+@patch("yertle.orgs.list_organizations_orgs_get.sync", return_value=_fake_list())
+@patch("yertle._client.get_client", return_value=object())
 def test_default_client_is_cached(_get_client, _sync):
-    yertle.list_orgs()
-    yertle.list_orgs()
-    yertle.list_orgs()
+    yertle.orgs.list()
+    yertle.orgs.list()
+    yertle.orgs.list()
 
     # get_client should only be called once across multiple SDK calls
     assert _get_client.call_count == 1
 
 
-@patch("yertle.list_organizations_orgs_get.sync", return_value=None)
-@patch("yertle.get_client", return_value=object())
-def test_list_orgs_raises_on_unexpected_response(_get_client, _sync):
+@patch("yertle.orgs.list_organizations_orgs_get.sync", return_value=None)
+@patch("yertle._client.get_client", return_value=object())
+def test_orgs_list_raises_on_unexpected_response(_get_client, _sync):
     with pytest.raises(RuntimeError, match="Unexpected response"):
-        yertle.list_orgs()
+        yertle.orgs.list()
+
+
+@patch("yertle.orgs.list_organizations_orgs_get.sync", return_value=_fake_list())
+@patch("yertle._client.get_client")
+def test_configure_bypasses_get_client(_get_client, _sync):
+    yertle.configure(token="yrt_test", api_url="http://localhost:8000")
+    yertle.orgs.list()
+
+    # configure() set the client directly; get_client() should never be called
+    _get_client.assert_not_called()
+
+    c = yertle.client()
+    assert c.token == "yrt_test"  # pyright: ignore[reportPrivateUsage]
