@@ -1,4 +1,4 @@
-"""Tests for credential resolution in `yertle.cli.auth`."""
+"""Tests for credential resolution in `yertle.shared.auth`."""
 
 import json
 from pathlib import Path
@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from yertle.cli import auth as auth_mod
+from yertle.shared import auth as auth_mod
 
 
 @pytest.fixture
