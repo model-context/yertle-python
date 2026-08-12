@@ -12,7 +12,7 @@ from yertle_client.errors import UnexpectedStatus
 from yertle_client.models import OrganizationListResponse
 
 from yertle import __version__
-from yertle.cli.auth import CONFIG_PATH, AuthError, get_client, save_credentials
+from yertle.shared.auth import CONFIG_PATH, AuthError, get_client, save_credentials
 
 
 def _format_api_error(client: AuthenticatedClient, exc: UnexpectedStatus) -> str:

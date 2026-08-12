@@ -10,38 +10,13 @@ are the next layer once this spike validates the auto-mount path.
 
 from __future__ import annotations
 
-import json
-import os
 import sys
-from pathlib import Path
 
 import httpx
 from fastmcp import FastMCP
 from fastmcp.server.providers.openapi import MCPType, RouteMap
 
-# TODO(consolidation): when the SDK MVP lands, move this resolution into
-# `yertle.shared.auth` and have both `yertle.cli.auth.get_client()` and
-# this module import from there. Inlined here to keep the spike tiny.
-_CONFIG_PATH = Path.home() / ".yertle" / "config.json"
-_DEFAULT_API_URL = "https://api.yertle.com"
-
-
-def _resolve_credentials() -> tuple[str, str]:
-    """Return (token, api_url) using the same precedence as `yertle.cli.auth`.
-
-    Token: $YERTLE_TOKEN > config file > exit 1.
-    URL:   $YERTLE_API_URL > config file > default prod URL.
-    """
-    cfg: dict[str, str] = {}
-    if _CONFIG_PATH.exists():
-        cfg = json.loads(_CONFIG_PATH.read_text())
-
-    token = os.environ.get("YERTLE_TOKEN") or cfg.get("token")
-    if not token:
-        sys.exit("yertle-mcp: no credentials found. Run `yertle login` or set $YERTLE_TOKEN.")
-
-    api_url = os.environ.get("YERTLE_API_URL") or cfg.get("api_url") or _DEFAULT_API_URL
-    return token, api_url
+from yertle.shared.auth import AuthError, resolve_credentials
 
 
 def build_server() -> FastMCP:
@@ -52,7 +27,7 @@ def build_server() -> FastMCP:
     called. The hand-written `push_node_state` merge wrapper from the
     old yertle-mcp will return as an explicit tool in a follow-up.
     """
-    token, api_url = _resolve_credentials()
+    token, api_url = resolve_credentials()
 
     spec = httpx.get(f"{api_url}/openapi.json", timeout=10).json()
 
@@ -74,8 +49,16 @@ def build_server() -> FastMCP:
 
 
 def main() -> None:
-    """Console-script entry point. Runs the server on stdio."""
-    server = build_server()
+    """Console-script entry point. Runs the server on stdio.
+
+    Catches `AuthError` so the console-script case still exits with a clean
+    user-facing message (matching the previous `sys.exit(...)` behavior),
+    not a stack trace.
+    """
+    try:
+        server = build_server()
+    except AuthError as e:
+        sys.exit(f"yertle-mcp: {e}")
     server.run()  # transport="stdio" by default
 
 

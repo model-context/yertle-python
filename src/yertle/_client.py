@@ -9,11 +9,7 @@ from __future__ import annotations
 
 from yertle_client.client import AuthenticatedClient
 
-# TODO(consolidation): when shared/auth.py lands (CLI + MCP + SDK is now
-# genuinely three consumers), have all three import resolve_credentials
-# from there instead of cli.auth. Today this is the only thing tying
-# the SDK to the CLI subpackage.
-from yertle.cli.auth import DEFAULT_API_URL, get_client
+from yertle.shared.auth import DEFAULT_API_URL, get_client
 
 __all__ = ["client", "configure", "get_client"]
 
