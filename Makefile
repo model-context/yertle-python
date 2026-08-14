@@ -3,8 +3,11 @@
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[32mmake %-12s\033[0m %s\n", $$1, $$2}'
 
-install: ## Install project + cli + dev deps into a uv-managed venv
-	uv sync --extra cli --extra dev
+install: ## Install project + all runtime extras + dev deps into a uv-managed venv
+	# All extras: pyright typechecks src/yertle/{sre,mcp}/ which import
+	# langchain / fastmcp. Without --extra sre --extra mcp, pyright can't
+	# resolve those imports and CI fails with `reportMissingImports`.
+	uv sync --extra cli --extra sre --extra mcp --extra dev
 
 lint: ## Run ruff lint
 	uv run ruff check .
