@@ -113,7 +113,13 @@ reportUnknownArgumentType = false
 reportDeprecated = false             # noisy from upstream LangChain **deprecated_kwargs
 
 executionEnvironments = [
-    { root = "tests", reportMissingParameterType = "none", reportUnknownParameterType = "none", reportUnknownLambdaType = "none" },
+    # `reportFunctionMemberAccess = "none"`: LangChain's `@tool` decorator
+    # attaches methods (.invoke, .run, .ainvoke, etc.) that pyright can't see
+    # under Python 3.11 + langchain-core's older type stubs — the return type
+    # narrows to `FunctionType` from pyright's perspective. Runtime behavior
+    # is correct; the methods do exist. Locally on Python 3.14 pyright resolves
+    # them fine, but CI runs 3.11 and hits the mismatch. Test-only loosening.
+    { root = "tests", reportMissingParameterType = "none", reportUnknownParameterType = "none", reportUnknownLambdaType = "none", reportFunctionMemberAccess = "none" },
 ]
 
 # ---------------------------------------------------------------------------
