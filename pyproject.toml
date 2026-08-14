@@ -57,12 +57,6 @@ Homepage = "https://github.com/model-context/yertle-python"
 Repository = "https://github.com/model-context/yertle-python"
 Issues = "https://github.com/model-context/yertle-python/issues"
 
-# Path dep during development — consumes the in-progress yertle-client package
-# from the sibling backend repo. Switched to a PyPI version dep once yertle-client
-# is published (after PAT auth slice lands).
-[tool.uv.sources]
-yertle-client = { path = "../yertle/clients/python", editable = true }
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

@@ -2446,25 +2446,22 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
     { name = "typer", marker = "extra == 'cli'", specifier = ">=0.12" },
     { name = "yertle", extras = ["cli"], marker = "extra == 'sre'" },
-    { name = "yertle-client", editable = "../yertle/clients/python" },
+    { name = "yertle-client", specifier = ">=0.1.0" },
 ]
 provides-extras = ["cli", "sre", "mcp", "dev"]
 
 [[package]]
 name = "yertle-client"
 version = "0.1.0"
-source = { editable = "../yertle/clients/python" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
     { name = "httpx" },
     { name = "python-dateutil" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "attrs", specifier = ">=23.2" },
-    { name = "httpx", specifier = ">=0.27,<1" },
-    { name = "python-dateutil", specifier = ">=2.8" },
+sdist = { url = "https://files.pythonhosted.org/packages/70/46/95e680f669320862ea988a6d8cfb67eb73e4107e45423503b20d0be31d6e/yertle_client-0.1.0.tar.gz", hash = "sha256:977648f57b29d08a67757578b444741204467959c3d996714269a53339c7a122", size = 77445, upload-time = "2026-08-14T01:41:03.773Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/66/79/bd230cbb191ca09e172864dc25ddef97766b4e1a82e2ec274572fa64bcbd/yertle_client-0.1.0-py3-none-any.whl", hash = "sha256:79fb7e36536c0d8200b14df32d9076d8456127d4dc5aba66df669273b78d9af0", size = 263562, upload-time = "2026-08-14T01:41:02.328Z" },
 ]
 
 [[package]]
