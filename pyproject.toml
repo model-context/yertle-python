@@ -57,12 +57,6 @@ Homepage = "https://github.com/model-context/yertle-python"
 Repository = "https://github.com/model-context/yertle-python"
 Issues = "https://github.com/model-context/yertle-python/issues"
 
-# Path dep during development — consumes the in-progress yertle-client package
-# from the sibling backend repo. Switched to a PyPI version dep once yertle-client
-# is published (after PAT auth slice lands).
-[tool.uv.sources]
-yertle-client = { path = "../yertle/clients/python", editable = true }
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -119,7 +113,13 @@ reportUnknownArgumentType = false
 reportDeprecated = false             # noisy from upstream LangChain **deprecated_kwargs
 
 executionEnvironments = [
-    { root = "tests", reportMissingParameterType = "none", reportUnknownParameterType = "none", reportUnknownLambdaType = "none" },
+    # `reportFunctionMemberAccess = "none"`: LangChain's `@tool` decorator
+    # attaches methods (.invoke, .run, .ainvoke, etc.) that pyright can't see
+    # under Python 3.11 + langchain-core's older type stubs — the return type
+    # narrows to `FunctionType` from pyright's perspective. Runtime behavior
+    # is correct; the methods do exist. Locally on Python 3.14 pyright resolves
+    # them fine, but CI runs 3.11 and hits the mismatch. Test-only loosening.
+    { root = "tests", reportMissingParameterType = "none", reportUnknownParameterType = "none", reportUnknownLambdaType = "none", reportFunctionMemberAccess = "none" },
 ]
 
 # ---------------------------------------------------------------------------
