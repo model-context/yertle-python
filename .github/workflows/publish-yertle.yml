@@ -1,0 +1,72 @@
+name: publish-yertle
+
+# Publish the hand-written `yertle` SDK facade to PyPI on a version tag.
+#
+# Trigger convention: `yertle-v{VERSION}` (e.g. `yertle-v0.1.0`) — matches
+# the yertle-client pattern in the sibling backend repo, decouples release
+# cadences across the ecosystem.
+#
+# Auth: PyPI Trusted Publisher (OIDC). No secrets stored — GitHub Actions
+# authenticates via its OIDC identity, PyPI recognizes it based on a
+# pending publisher registered manually (owner=model-context, repo=yertle-python,
+# workflow=publish-yertle.yml).
+#
+# Unlike yertle-client's workflow (in the backend repo), there's NO regen
+# step here. yertle is hand-written; publishing is just uv build + uv publish
+# via the pypa action. See docs/notes/features/yertle-python/PACKAGING.md
+# in the backend repo for the full playbook + gotchas.
+
+on:
+  push:
+    tags:
+      - 'yertle-v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build wheel + sdist but skip PyPI upload"
+        required: false
+        default: 'false'
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # EXCLUSIVE not additive — declaring any permission drops all defaults.
+      # See PACKAGING.md "Gotchas" #1.
+      id-token: write   # required for PyPI OIDC
+      contents: read    # required for actions/checkout
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Verify tag version matches package version
+        # Tag `yertle-v0.1.0` must match `version = "0.1.0"` in pyproject.toml.
+        # Skipped for workflow_dispatch (untagged commits can dry-run).
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#yertle-v}"
+          PKG_VERSION=$(uv run --python 3.12 --with tomli python -c "import tomli; print(tomli.load(open('pyproject.toml','rb'))['project']['version'])")
+          echo "Tag version:     $TAG_VERSION"
+          echo "Package version: $PKG_VERSION"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match package version ($PKG_VERSION). Bump pyproject.toml before tagging."
+            exit 1
+          fi
+
+      - name: Build wheel + sdist
+        run: uv build
+
+      - name: Show built artifacts
+        run: ls -la dist/
+
+      - name: Publish to PyPI
+        # Skipped on workflow_dispatch when dry_run='true'.
+        if: >
+          github.event_name == 'push' ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'true')
+        uses: pypa/gh-action-pypi-publish@release/v1
