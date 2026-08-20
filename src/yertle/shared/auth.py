@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -32,6 +33,13 @@ DEFAULT_API_URL = "https://api.yertle.com"
 
 TOKEN_ENV_VAR = "YERTLE_TOKEN"
 API_URL_ENV_VAR = "YERTLE_API_URL"
+
+# The config holds a bearer token, so it is owner-only — matching `gh`'s
+# hosts.yml and `~/.aws/credentials`. Set explicitly rather than inherited
+# from the caller's umask: under the common default of 022 the token would
+# otherwise land world-readable.
+_CONFIG_MODE = 0o600
+_CONFIG_DIR_MODE = 0o700
 
 
 class AuthError(Exception):
@@ -72,10 +80,54 @@ class ResolvedCredentials:
     api_url_source: Source
 
 
+def _read_config() -> dict[str, str]:
+    """Return the parsed config file, or `{}` if it does not exist.
+
+    A corrupt file raises `AuthError` rather than a bare `JSONDecodeError`, so
+    every failure in this module reaches the user as a sentence instead of a
+    traceback — and names the file they need to fix.
+    """
+    if not CONFIG_PATH.exists():
+        return {}
+    try:
+        return json.loads(CONFIG_PATH.read_text())
+    except json.JSONDecodeError as e:
+        raise AuthError(
+            f"Config at {CONFIG_PATH} is not valid JSON ({e}). "
+            f"Fix or delete it, then run `yertle login`.",
+        ) from e
+
+
 def save_credentials(api_url: str, token: str) -> None:
-    """Persist `{api_url, token}` to ~/.yertle/config.json."""
+    """Persist `api_url` and `token` to ~/.yertle/config.json.
+
+    Merges into any existing config rather than replacing it, so keys this
+    version does not know about survive a re-login.
+
+    Writes via a temp file in the same directory plus `os.replace`, which is
+    atomic: an interrupted or failed write cannot truncate a working config,
+    and the token is never briefly visible at a wider mode. `mkstemp` creates
+    the file 0600 regardless of umask, and `os.replace` preserves that.
+    """
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    CONFIG_PATH.write_text(json.dumps({"api_url": api_url, "token": token}))
+    # `exist_ok=True` won't tighten a directory an earlier version created
+    # under a loose umask, so set the mode unconditionally.
+    CONFIG_PATH.parent.chmod(_CONFIG_DIR_MODE)
+
+    config = _read_config()
+    config.update({"api_url": api_url, "token": token})
+
+    fd, tmp_name = tempfile.mkstemp(dir=CONFIG_PATH.parent, prefix=".config-", suffix=".json")
+    tmp_path = Path(tmp_name)
+    try:
+        os.fchmod(fd, _CONFIG_MODE)  # explicit: mkstemp's 0600 is not contractual
+        with os.fdopen(fd, "w") as handle:
+            json.dump(config, handle, indent=2)
+            handle.write("\n")
+        os.replace(tmp_path, CONFIG_PATH)
+    except BaseException:
+        tmp_path.unlink(missing_ok=True)
+        raise
 
 
 def resolve() -> ResolvedCredentials:
@@ -92,9 +144,7 @@ def resolve() -> ResolvedCredentials:
     status` exists) but is also how a token issued by one backend ends up
     pointed at another, which surfaces as an opaque 401.
     """
-    cfg: dict[str, str] = {}
-    if CONFIG_PATH.exists():
-        cfg = json.loads(CONFIG_PATH.read_text())
+    cfg = _read_config()
 
     if token := os.environ.get(TOKEN_ENV_VAR):
         token_source = Source.ENV
