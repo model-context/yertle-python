@@ -187,8 +187,18 @@ def auth_status() -> None:
         ("API URL", resolved.api_url, _source_label(resolved.api_url_source, auth.API_URL_ENV_VAR)),
         ("Token", token_display, _source_label(resolved.token_source, auth.TOKEN_ENV_VAR)),
     ]
+    # Size the value column to its contents rather than a fixed width: a long
+    # API URL would otherwise shove the source column out of alignment.
+    value_width = max(len(value) for _, value, _ in rows)
     for label, value, source in rows:
-        console.print(f"  [bold]{label:<8}[/bold] {value:<32} [dim]({source})[/dim]")
+        # soft_wrap: values are URLs and filesystem paths, which Rich would
+        # otherwise hard-break mid-token to fit the console (splitting
+        # `config.json` across lines on a narrow terminal). Let the terminal
+        # wrap instead, so the value stays greppable and copy-pasteable.
+        console.print(
+            f"  [bold]{label:<8}[/bold] {value:<{value_width}}  [dim]({source})[/dim]",
+            soft_wrap=True,
+        )
 
     if resolved.token is None:
         console.print(

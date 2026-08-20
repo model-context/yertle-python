@@ -81,3 +81,31 @@ def test_status_exits_nonzero_when_unauthenticated(isolated_config: Path) -> Non
 )
 def test_mask_token(token: str, expected: str) -> None:
     assert _mask_token(token) == expected
+
+
+def test_status_does_not_wrap_long_paths_on_a_narrow_console(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: Rich hard-broke the config path mid-token to fit the console.
+
+    Values are URLs and filesystem paths — breaking them across lines makes the
+    output neither greppable nor copy-pasteable. Asserts the path appears
+    *contiguously*: checking for a substring like `config.json` instead would
+    only catch the bug when a line break happened to land inside that literal.
+    """
+    cfg_path = tmp_path / "a-fairly-long-directory-name-like-ci-produces" / "config.json"
+    monkeypatch.setattr(auth_mod, "CONFIG_PATH", cfg_path)
+    monkeypatch.delenv("YERTLE_TOKEN", raising=False)
+    monkeypatch.delenv("YERTLE_API_URL", raising=False)
+    monkeypatch.setenv("COLUMNS", "40")
+    cfg_path.parent.mkdir(parents=True)
+    cfg_path.write_text(
+        json.dumps({"token": "cfg-token-long-enough", "api_url": "https://cfg.example"})
+    )
+
+    result = runner.invoke(app, ["auth", "status"])
+
+    assert result.exit_code == 0
+    assert str(cfg_path) in result.output
+    assert "https://cfg.example" in result.output
