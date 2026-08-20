@@ -119,7 +119,11 @@ executionEnvironments = [
     # narrows to `FunctionType` from pyright's perspective. Runtime behavior
     # is correct; the methods do exist. Locally on Python 3.14 pyright resolves
     # them fine, but CI runs 3.11 and hits the mismatch. Test-only loosening.
-    { root = "tests", reportMissingParameterType = "none", reportUnknownParameterType = "none", reportUnknownLambdaType = "none", reportFunctionMemberAccess = "none" },
+    #
+    # `reportPrivateUsage = "none"`: tests exercise module-private helpers
+    # (e.g. `_mask_token`) directly. Testing them through the public CLI
+    # surface alone would leave their edge cases uncovered.
+    { root = "tests", reportMissingParameterType = "none", reportUnknownParameterType = "none", reportUnknownLambdaType = "none", reportFunctionMemberAccess = "none", reportPrivateUsage = "none" },
 ]
 
 # ---------------------------------------------------------------------------

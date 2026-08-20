@@ -9,7 +9,8 @@ Single source of truth for:
 
 Consumers:
 - `yertle.cli.main` — uses `get_client`, `save_credentials`, `AuthError`,
-  `CONFIG_PATH` during `yertle login` and `yertle orgs`.
+  `CONFIG_PATH` during `yertle login` and `yertle orgs`, and `resolve` for
+  `yertle auth status`.
 - `yertle.mcp.server` — uses `resolve_credentials` (pure tuple-of-strings, no
   `AuthenticatedClient` needed since FastMCP wires its own `httpx.AsyncClient`).
 - `yertle._client` — uses `get_client` and `DEFAULT_API_URL` for the SDK's lazy
@@ -20,12 +21,17 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 from yertle_client.client import AuthenticatedClient
 
 CONFIG_PATH = Path.home() / ".yertle" / "config.json"
 DEFAULT_API_URL = "https://api.yertle.com"
+
+TOKEN_ENV_VAR = "YERTLE_TOKEN"
+API_URL_ENV_VAR = "YERTLE_API_URL"
 
 
 class AuthError(Exception):
@@ -37,37 +43,95 @@ class AuthError(Exception):
     """
 
 
+class Source(StrEnum):
+    """Where a resolved credential value came from.
+
+    Reported by `yertle auth status` so a user can see which of the two
+    possible sources actually won for each key. Rendering (the `$YERTLE_TOKEN`
+    / `~/.yertle/config.json` labels) belongs to the CLI, not here.
+    """
+
+    ENV = "env"
+    CONFIG = "config"
+    DEFAULT = "default"
+    MISSING = "missing"
+
+
+@dataclass(frozen=True)
+class ResolvedCredentials:
+    """Effective credentials plus the provenance of each key.
+
+    `token` is `None` when no token could be resolved — `resolve()` reports
+    that state rather than raising so `yertle auth status` can render it.
+    Callers that need a usable token go through `resolve_credentials()`.
+    """
+
+    token: str | None
+    api_url: str
+    token_source: Source
+    api_url_source: Source
+
+
 def save_credentials(api_url: str, token: str) -> None:
     """Persist `{api_url, token}` to ~/.yertle/config.json."""
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     CONFIG_PATH.write_text(json.dumps({"api_url": api_url, "token": token}))
 
 
-def resolve_credentials() -> tuple[str, str]:
-    """Return `(token, api_url)` using per-key precedence.
+def resolve() -> ResolvedCredentials:
+    """Resolve credentials with provenance, without raising on a missing token.
 
-    Resolution matches `gh` / `aws-cli` — the two settings can come from
-    different sources:
+    Precedence is applied **per key**, matching `gh` / `aws-cli` — the two
+    settings can come from different sources:
 
-    - **Token**: `$YERTLE_TOKEN` env > config file > raise `AuthError`
+    - **Token**: `$YERTLE_TOKEN` env > config file > `None` (`Source.MISSING`)
     - **API URL**: `$YERTLE_API_URL` env > config file > `DEFAULT_API_URL`
 
-    So `YERTLE_TOKEN=yrt_...` alone is sufficient in production — the URL
-    defaults to `https://api.yertle.com`. Local dev still needs to point at
-    `localhost:8000` via env var or `yertle login --api-url`.
+    Because the keys resolve independently, a config-file token can pair with
+    an env-var URL. That combination is legitimate (and the reason `yertle auth
+    status` exists) but is also how a token issued by one backend ends up
+    pointed at another, which surfaces as an opaque 401.
     """
     cfg: dict[str, str] = {}
     if CONFIG_PATH.exists():
         cfg = json.loads(CONFIG_PATH.read_text())
 
-    token = os.environ.get("YERTLE_TOKEN") or cfg.get("token")
-    if not token:
-        raise AuthError(
-            "Not authenticated. Run `yertle login` or set $YERTLE_TOKEN.",
-        )
+    if token := os.environ.get(TOKEN_ENV_VAR):
+        token_source = Source.ENV
+    elif token := cfg.get("token"):
+        token_source = Source.CONFIG
+    else:
+        token, token_source = None, Source.MISSING
 
-    api_url = os.environ.get("YERTLE_API_URL") or cfg.get("api_url") or DEFAULT_API_URL
-    return token, api_url
+    if api_url := os.environ.get(API_URL_ENV_VAR):
+        api_url_source = Source.ENV
+    elif api_url := cfg.get("api_url"):
+        api_url_source = Source.CONFIG
+    else:
+        api_url, api_url_source = DEFAULT_API_URL, Source.DEFAULT
+
+    return ResolvedCredentials(
+        token=token,
+        api_url=api_url,
+        token_source=token_source,
+        api_url_source=api_url_source,
+    )
+
+
+def resolve_credentials() -> tuple[str, str]:
+    """Return `(token, api_url)`, raising `AuthError` if no token is available.
+
+    Thin wrapper over `resolve()` so the precedence logic lives in exactly one
+    place. `YERTLE_TOKEN=yrt_...` alone is sufficient in production — the URL
+    defaults to `https://api.yertle.com`. Local dev still needs to point at
+    `localhost:8000` via env var or `yertle login --api-url`.
+    """
+    resolved = resolve()
+    if resolved.token is None:
+        raise AuthError(
+            f"Not authenticated. Run `yertle login` or set ${TOKEN_ENV_VAR}.",
+        )
+    return resolved.token, resolved.api_url
 
 
 def get_client() -> AuthenticatedClient:

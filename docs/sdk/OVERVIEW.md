@@ -158,6 +158,8 @@ Resolution order (when `configure()` hasn't been called):
 
 Token and URL resolve independently (per-key precedence), so `YERTLE_TOKEN=yrt_xxx` alone is sufficient in production — the URL defaults to prod. Local dev still needs to point at `localhost:8000` via env var or `yertle login --api-url ...`.
 
+Because the keys resolve independently, they can come from *different* sources — a config-file token paired with an env-var URL is legitimate, but is also how a token issued by one backend ends up aimed at another (which surfaces only as an opaque 401). Run `yertle auth status` to see the effective value and provenance of each key without making a request.
+
 ## Wider surface, when it lands
 
 Each new resource follows the same recipe: one file (`nodes.py`, `branches.py`, etc.), one import in `__init__.py`, smoke tests in `tests/test_sdk.py`. Roughly:
