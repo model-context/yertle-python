@@ -1,6 +1,6 @@
 [project]
 name = "yertle"
-version = "0.1.0"
+version = "0.2.0"
 description = "Python ecosystem for Yertle — CLI, SDK, and tooling for the Yertle architecture-graph platform."
 readme = "README.md"
 license = { file = "LICENSE" }
