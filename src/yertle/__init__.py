@@ -14,12 +14,22 @@ for callers who want an explicit client, async variants, or untyped raw
 responses.
 """
 
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _dist_version
+
 from yertle_client.client import AuthenticatedClient
 
 from yertle import orgs
 from yertle._client import client, configure, get_client
 
-__version__ = "0.0.1"
+try:
+    # Read the version back from installed distribution metadata rather than
+    # hardcoding it. `pyproject.toml` stays the single place the number is
+    # written; previously this constant was a second copy and drifted — the
+    # published 0.1.0 wheel reported 0.0.1 from `yertle version`.
+    __version__ = _dist_version("yertle")
+except PackageNotFoundError:  # pragma: no cover — running from an uninstalled tree
+    __version__ = "0.0.0+unknown"
 __all__ = [
     "AuthenticatedClient",
     "client",
