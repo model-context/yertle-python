@@ -1,6 +1,9 @@
 """Tests for credential resolution in `yertle.shared.auth`."""
 
 import json
+import os
+import stat
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import patch
 
@@ -174,3 +177,107 @@ def test_resolve_reports_missing_token_without_raising(
     assert resolved.token is None
     assert resolved.token_source is auth_mod.Source.MISSING
     assert resolved.api_url_source is auth_mod.Source.DEFAULT
+
+
+# ---------------------------------------------------------------------------
+# `save_credentials` — permissions, merging, atomicity
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def loose_umask() -> Iterator[None]:
+    """Run under umask 022 — the common default, and where the bug shows.
+
+    On a machine whose interactive umask is already 077 these assertions pass
+    against the unfixed code, so pinning the umask is what makes them real.
+    """
+    previous = os.umask(0o022)
+    try:
+        yield
+    finally:
+        os.umask(previous)
+
+
+def _mode(path: Path) -> int:
+    return stat.S_IMODE(path.stat().st_mode)
+
+
+def test_save_credentials_writes_owner_only_file(
+    isolated_config: Path,
+    loose_umask: None,
+) -> None:
+    auth_mod.save_credentials(api_url="https://example.test", token="yrt_secret")
+
+    assert _mode(isolated_config) == 0o600
+
+
+def test_save_credentials_creates_owner_only_directory(
+    isolated_config: Path,
+    loose_umask: None,
+) -> None:
+    auth_mod.save_credentials(api_url="https://example.test", token="yrt_secret")
+
+    assert _mode(isolated_config.parent) == 0o700
+
+
+def test_save_credentials_tightens_a_preexisting_loose_file(
+    isolated_config: Path,
+    loose_umask: None,
+) -> None:
+    """Upgrade path: a config an older version wrote world-readable gets fixed."""
+    isolated_config.parent.mkdir(parents=True)
+    isolated_config.parent.chmod(0o755)
+    isolated_config.write_text(json.dumps({"token": "old", "api_url": "https://old.test"}))
+    isolated_config.chmod(0o644)
+
+    auth_mod.save_credentials(api_url="https://example.test", token="yrt_secret")
+
+    assert _mode(isolated_config) == 0o600
+    assert _mode(isolated_config.parent) == 0o700
+
+
+def test_save_credentials_preserves_unknown_keys(isolated_config: Path) -> None:
+    """A re-login must not drop config this version doesn't know about."""
+    isolated_config.parent.mkdir(parents=True)
+    isolated_config.write_text(
+        json.dumps({"token": "old", "api_url": "https://old.test", "default_org": "org-1"})
+    )
+
+    auth_mod.save_credentials(api_url="https://new.test", token="yrt_new")
+
+    saved = json.loads(isolated_config.read_text())
+    assert saved == {
+        "token": "yrt_new",
+        "api_url": "https://new.test",
+        "default_org": "org-1",
+    }
+
+
+def test_failed_write_leaves_the_existing_config_intact(
+    isolated_config: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Atomicity: a crash mid-write must not truncate working credentials."""
+    isolated_config.parent.mkdir(parents=True)
+    original = json.dumps({"token": "good", "api_url": "https://good.test"})
+    isolated_config.write_text(original)
+
+    def boom(*_args: object, **_kwargs: object) -> None:
+        raise OSError("disk full")
+
+    monkeypatch.setattr(auth_mod.json, "dump", boom)
+
+    with pytest.raises(OSError, match="disk full"):
+        auth_mod.save_credentials(api_url="https://new.test", token="yrt_new")
+
+    assert isolated_config.read_text() == original
+    leftovers = list(isolated_config.parent.glob(".config-*"))
+    assert leftovers == [], f"temp file not cleaned up: {leftovers}"
+
+
+def test_corrupt_config_raises_auth_error_not_traceback(isolated_config: Path) -> None:
+    isolated_config.parent.mkdir(parents=True)
+    isolated_config.write_text("{not json")
+
+    with pytest.raises(auth_mod.AuthError, match="not valid JSON"):
+        auth_mod.resolve()
