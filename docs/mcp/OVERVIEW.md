@@ -27,7 +27,7 @@ The new server is **one file, ~50 lines of real code**. It does that by leaning 
 
 At startup, `yertle.mcp.server:build_server()`:
 
-1. Resolves a PAT and API URL the same way the CLI does (`$YERTLE_TOKEN` env > `~/.yertle/config.json` > error).
+1. Resolves a PAT and API URL the same way the CLI does (`$YERTLE_TOKEN` env > `~/.yertle/config.json` > error). `yertle auth status` reports what that resolution currently yields.
 2. `GET`s `/openapi.json` from the resolved API URL.
 3. Constructs an `httpx.AsyncClient` with `Authorization: Bearer {token}` baked in.
 4. Calls `FastMCP.from_openapi(spec, client=..., route_maps=[GETs→TOOL, ".*"→EXCLUDE])`.

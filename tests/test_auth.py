@@ -105,3 +105,72 @@ def test_raises_auth_error_when_nothing_set(
 
     with pytest.raises(auth_mod.AuthError, match="Not authenticated"):
         auth_mod.get_client()
+
+
+# ---------------------------------------------------------------------------
+# `resolve()` — provenance reporting behind `yertle auth status`
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_reports_env_as_source_for_both_keys(
+    isolated_config: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    isolated_config.parent.mkdir(parents=True)
+    isolated_config.write_text(json.dumps({"token": "cfg-token", "api_url": "https://cfg.example"}))
+
+    monkeypatch.setenv("YERTLE_TOKEN", "env-token")
+    monkeypatch.setenv("YERTLE_API_URL", "https://env.example")
+
+    resolved = auth_mod.resolve()
+
+    assert resolved.token == "env-token"
+    assert resolved.api_url == "https://env.example"
+    assert resolved.token_source is auth_mod.Source.ENV
+    assert resolved.api_url_source is auth_mod.Source.ENV
+
+
+def test_resolve_reports_mixed_sources(
+    isolated_config: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The footgun case: config-file token aimed at an env-var URL."""
+    isolated_config.parent.mkdir(parents=True)
+    isolated_config.write_text(json.dumps({"token": "cfg-token", "api_url": "https://cfg.example"}))
+
+    _clear_env(monkeypatch)
+    monkeypatch.setenv("YERTLE_API_URL", "http://localhost:8000")
+
+    resolved = auth_mod.resolve()
+
+    assert resolved.token == "cfg-token"
+    assert resolved.token_source is auth_mod.Source.CONFIG
+    assert resolved.api_url == "http://localhost:8000"
+    assert resolved.api_url_source is auth_mod.Source.ENV
+
+
+def test_resolve_reports_default_url(
+    isolated_config: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _clear_env(monkeypatch)
+    monkeypatch.setenv("YERTLE_TOKEN", "env-token")
+
+    resolved = auth_mod.resolve()
+
+    assert resolved.api_url == auth_mod.DEFAULT_API_URL
+    assert resolved.api_url_source is auth_mod.Source.DEFAULT
+
+
+def test_resolve_reports_missing_token_without_raising(
+    isolated_config: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`resolve()` must not raise — `auth status` renders the unauthenticated state."""
+    _clear_env(monkeypatch)
+
+    resolved = auth_mod.resolve()
+
+    assert resolved.token is None
+    assert resolved.token_source is auth_mod.Source.MISSING
+    assert resolved.api_url_source is auth_mod.Source.DEFAULT
