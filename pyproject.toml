@@ -121,8 +121,8 @@ executionEnvironments = [
     # them fine, but CI runs 3.11 and hits the mismatch. Test-only loosening.
     #
     # `reportPrivateUsage = "none"`: tests exercise module-private helpers
-    # (e.g. `_mask_token`) directly. Testing them through the public CLI
-    # surface alone would leave their edge cases uncovered.
+    # (e.g. `_mask_token`, `_source_checkout`) directly, since their edge
+    # cases are not all reachable through the public CLI surface.
     { root = "tests", reportMissingParameterType = "none", reportUnknownParameterType = "none", reportUnknownLambdaType = "none", reportFunctionMemberAccess = "none", reportPrivateUsage = "none" },
 ]
 
