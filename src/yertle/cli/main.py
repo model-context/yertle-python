@@ -27,7 +27,17 @@ def _format_api_error(client: AuthenticatedClient, exc: UnexpectedStatus) -> str
     """
     base_url = getattr(client, "_base_url", "<unknown>")
     status = exc.status_code
-    if status == HTTPStatus.UNAUTHORIZED:
+    if status == HTTPStatus.UNAUTHORIZED and _is_edge_rejection(exc.content):
+        hint = (
+            "401 Unauthorized — rejected before reaching the Yertle backend.\n"
+            "  This host sits behind a JWT authorizer that does not accept "
+            "personal access tokens:\n"
+            "  a `yrt_` token isn't a JWT, so it's refused on sight and never "
+            "looked up.\n"
+            "  Your token is almost certainly fine — PATs currently work only "
+            "against a locally-run backend."
+        )
+    elif status == HTTPStatus.UNAUTHORIZED:
         hint = (
             "401 Unauthorized — token rejected by the backend. "
             "Likely causes: the token was issued by a different backend than "
@@ -45,6 +55,45 @@ def _format_api_error(client: AuthenticatedClient, exc: UnexpectedStatus) -> str
 # Below this length a prefix+suffix reveal would expose most of the secret,
 # so short values are masked entirely.
 _MIN_MASKABLE_TOKEN_LEN = 16
+
+
+def _web_url_for(api_url: str) -> str | None:
+    """Best-effort web-app URL for an API base URL, or `None` if unsure.
+
+    Personal access tokens are minted in the web app, not by the API, so the
+    two hosts differ. Deriving the wrong one sends a first-time user to a 401
+    page during their very first interaction with the tool — which is what
+    this command did until now, by appending `/settings` to the API URL.
+
+    Returns `None` rather than guessing when the mapping isn't obvious, so the
+    prompt can stay vague instead of confidently wrong.
+    """
+    parsed = urlparse(api_url)
+    host, scheme = parsed.hostname, parsed.scheme or "https"
+    if not host:
+        return None
+    if host in {"localhost", "127.0.0.1"}:
+        # Local convention: backend on :8000, web app on :3000.
+        return f"{scheme}://{host}:3000"
+    if host.startswith("api."):
+        return f"{scheme}://{host.removeprefix('api.')}"
+    return None
+
+
+def _is_edge_rejection(content: bytes) -> bool:
+    """True if a 401 body came from the API Gateway authorizer, not the app.
+
+    API Gateway's JWT authorizer rejects a request before Lambda runs and
+    returns `{"message": "Unauthorized"}`. The Yertle backend, reached
+    directly, returns FastAPI's `{"detail": "..."}`. The difference matters:
+    an edge rejection means the token was never looked up at all, so
+    "revoked or expired" is the wrong thing to tell the user.
+    """
+    try:
+        body = _json.loads(content)
+    except (ValueError, TypeError):
+        return False
+    return isinstance(body, dict) and "message" in body and "detail" not in body
 
 
 def _mask_token(token: str) -> str:
@@ -140,12 +189,30 @@ def login(
         "--api-url",
         help="Yertle API base URL (e.g. https://api.yertle.com).",
     ),
+    web_url: str | None = typer.Option(
+        None,
+        "--web-url",
+        help="Web app base URL, if it can't be derived from --api-url.",
+    ),
 ) -> None:
     """Save API credentials to ~/.yertle/config.json."""
-    typer.echo(
-        f"Generate a personal access token at {api_url.rstrip('/')}/settings, then paste it below.",
-    )
-    token = typer.prompt("Token", hide_input=True)
+    settings_url = web_url or _web_url_for(api_url)
+    if settings_url:
+        typer.echo(
+            f"Generate a personal access token at {settings_url.rstrip('/')}/settings, "
+            "then paste it below.",
+        )
+    else:
+        typer.echo(
+            "Generate a personal access token from the Settings page of your "
+            "Yertle web app, then paste it below.",
+        )
+    token = typer.prompt("Token", hide_input=True).strip()
+    if not token:
+        # An empty token would persist a config that looks populated but
+        # resolves as unauthenticated, since `resolve()` treats "" as absent.
+        typer.secho("No token entered — nothing saved.", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
     auth.save_credentials(api_url=api_url, token=token)
     typer.echo(f"✓ Saved credentials to {auth.CONFIG_PATH}")
 

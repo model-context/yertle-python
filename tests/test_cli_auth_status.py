@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from yertle.cli.main import _mask_token, app
+from yertle.cli.main import _is_edge_rejection, _mask_token, _web_url_for, app
 from yertle.shared import auth as auth_mod
 
 runner = CliRunner()
@@ -109,3 +109,46 @@ def test_status_does_not_wrap_long_paths_on_a_narrow_console(
     assert result.exit_code == 0
     assert str(cfg_path) in result.output
     assert "https://cfg.example" in result.output
+
+
+@pytest.mark.parametrize(
+    ("api_url", "expected"),
+    [
+        ("https://api.yertle.com", "https://yertle.com"),
+        ("https://api.dev.yertle.com", "https://dev.yertle.com"),
+        ("http://localhost:8000", "http://localhost:3000"),
+        ("http://127.0.0.1:8000", "http://127.0.0.1:3000"),
+        ("https://yertle.internal", None),  # can't derive — don't guess
+        ("not-a-url", None),
+    ],
+)
+def test_web_url_for(api_url: str, expected: str | None) -> None:
+    """PATs are minted in the web app, so login must not point at the API host."""
+    assert _web_url_for(api_url) == expected
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        (b'{"message":"Unauthorized"}', True),  # API Gateway authorizer
+        (b'{"detail":"Invalid or expired token"}', False),  # FastAPI, app-level
+        (b'{"detail":"Authorization header required"}', False),
+        (b"not json at all", False),
+        (b"", False),
+    ],
+)
+def test_is_edge_rejection(body: bytes, expected: bool) -> None:
+    assert _is_edge_rejection(body) is expected
+
+
+def test_login_rejects_an_empty_token(
+    isolated_config: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An empty token would persist a config that resolves as unauthenticated."""
+    monkeypatch.setattr("yertle.cli.main.typer.prompt", lambda *a, **k: "   ")
+
+    result = runner.invoke(app, ["login", "--api-url", "http://localhost:8000"])
+
+    assert result.exit_code == 1
+    assert not isolated_config.exists()
