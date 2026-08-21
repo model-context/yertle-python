@@ -294,7 +294,7 @@ Tangential to MCP but worth mentioning since it's the parallel sunset on the con
 1. Tag the Go repo's final commit as `v0.x.x-go`.
 2. Rename `model-context/yertle-cli` → `model-context/yertle-cli-old`.
 3. The Python repo (currently `model-context/yertle-python`) takes over the `yertle-cli` name.
-4. Update Homebrew tap to wrap the PyPI package instead of fetching GoReleaser binaries — `brew install yertle` keeps working with no user-facing change.
+4. ~~Update Homebrew tap to wrap the PyPI package instead of fetching GoReleaser binaries.~~ **Done** (homebrew-yertle PR #1, 2026-08-14). Note the install path users are pointed at is now `uv tool install "yertle[sre,mcp]"`; the tap still works but is no longer the documented default.
 5. Archive `model-context/yertle-cli-old`.
 
 That's blocked on finishing Slice 3 (full CLI command surface in Python) so the rename doesn't strand any commands users depend on. Independent of the MCP work.
