@@ -74,21 +74,31 @@ jobs:
 
       - run: make install
 
+      # Each report is written to a file, echoed to the log, *and* appended to
+      # the job summary. Sending it only to the summary makes a broken tool
+      # indistinguishable from a clean report, since `|| true` swallows the
+      # exit code either way — the log copy is what proves the tool actually ran.
       - name: Dead code (vulture)
         run: |
+          uv run vulture >vulture.txt 2>&1 || true
+          echo "--- vulture ---"
+          cat vulture.txt
           {
             echo '## Dead code'
             echo '```'
-            uv run vulture || true
+            cat vulture.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Duplication (jscpd)
         run: |
+          npx --yes jscpd@4 src --min-lines 8 --min-tokens 50 \
+            --reporters consoleFull --threshold 100 >jscpd.txt 2>&1 || true
+          echo "--- jscpd ---"
+          cat jscpd.txt
           {
             echo '## Duplication'
             echo '```'
-            npx --yes jscpd@4 src --min-lines 8 --min-tokens 50 \
-              --reporters consoleFull --threshold 100 2>/dev/null || true
+            cat jscpd.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
