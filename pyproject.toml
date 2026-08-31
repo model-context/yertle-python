@@ -42,9 +42,16 @@ mcp = [
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
-    "ruff>=0.6",
+    "pytest-cov>=5.0",
+    "diff-cover>=9.0",
+    # Pinned exactly, not floored: ruff's formatter output and lint rule set
+    # both change across minor versions, so a range lets a contributor's
+    # pre-commit format code that CI's ruff then rejects. The `rev` in
+    # .pre-commit-config.yaml must be bumped in lockstep with this pin.
+    "ruff==0.15.13",
     "pyright>=1.1.380",
     "pre-commit>=3.7",
+    "vulture>=2.11",
 ]
 
 [project.scripts]
@@ -83,14 +90,36 @@ select = [
     "PL",            # pylint subset
     "TID",           # tidy imports
     "ANN",           # annotations
+    "ARG",           # unused arguments — dead code ruff's F rules don't reach
+    "BLE",           # blind except — the error-masking failure mode
+    "TRY",           # exception antipatterns
+    "C90",           # mccabe complexity ceiling
+    "ERA",           # commented-out code
 ]
 ignore = [
     "PLR0913",  # too many arguments — common in CLI command signatures
     "ANN401",   # Any is sometimes correct
+    # TRY003 bans long messages at the `raise` site. This package deliberately
+    # does the opposite: an exception's message IS the user-facing text (see
+    # `AuthError` in shared/auth.py), so the message belongs where the context
+    # to write it lives.
+    "TRY003",
+    # TRY004 wants TypeError for isinstance checks. The isinstance guards in the
+    # SDK resources validate an unexpected *wire response shape*, not a caller's
+    # argument type — RuntimeError is the correct signal there.
+    "TRY004",
 ]
 
+[tool.ruff.lint.mccabe]
+# Deliberately tight. The most complex function in the tree today is well
+# under this; the ceiling exists to catch accreted branching before it lands,
+# which is the shape unreviewed generated code tends to grow.
+max-complexity = 10
+
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["ANN", "PLR2004"]
+# ARG: pytest fixtures are requested by name and often unused in the body
+# (autouse fixtures especially) — the "argument" is a dependency declaration.
+"tests/**" = ["ANN", "PLR2004", "ARG"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -133,3 +162,47 @@ executionEnvironments = [
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
 asyncio_mode = "auto"
+
+# ---------------------------------------------------------------------------
+# Coverage
+# ---------------------------------------------------------------------------
+# The gate in CI is *diff* coverage, not total coverage: `diff-cover` reads this
+# XML report and fails only when lines added or changed by the PR are untested.
+# A total-coverage floor punishes unrelated work and invites gaming; a diff
+# floor asks exactly one thing — test what you just wrote.
+[tool.coverage.run]
+source = ["src/yertle"]
+branch = true
+
+[tool.coverage.report]
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "@overload",
+]
+
+# ---------------------------------------------------------------------------
+# Vulture: dead-code detection (advisory — see the `hygiene` make target)
+# ---------------------------------------------------------------------------
+# Covers what ruff and pyright structurally cannot: unused *public* functions
+# and whole unreferenced modules. Because this is a published library, most of
+# the public surface has no in-repo caller by design, so framework-registered
+# and re-exported names are ignored below. Anything left is worth a look.
+[tool.vulture]
+paths = ["src"]
+min_confidence = 60
+# Decorator registration makes a function reachable without a call site.
+ignore_decorators = [
+    "@app.command",
+    "@app.callback",
+    "@auth_app.command",
+    "@tool",
+]
+ignore_names = [
+    # pydantic-settings reads this class attribute reflectively.
+    "model_config",
+    # Documented in agent.py as wired-but-unused, pending the first mutating
+    # tool. Intentional, not drift.
+    "allow_writes",
+]

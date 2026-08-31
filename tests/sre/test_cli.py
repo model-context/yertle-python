@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import pytest
 from typer.testing import CliRunner
 
 from yertle.sre import __version__
 from yertle.sre.cli import app
+from yertle.sre.cli.app import _load_settings
 
 runner = CliRunner()
 
@@ -49,3 +51,16 @@ def test_ask_rejects_whitespace_only_question():
     assert result.exit_code == 2
     output = result.stdout + (result.stderr or "")
     assert "cannot be empty" in output
+
+
+def test_load_settings_reports_bad_config_and_exits_2(monkeypatch, capsys):
+    # A malformed value in the environment must surface as a one-line message
+    # and exit 2 — not as a pydantic traceback. This is the CLI's only
+    # deliberate blind `except`, so it needs a test that pins the behavior.
+    monkeypatch.setenv("YERTLE_SRE_MAX_ITERATIONS", "not-a-number")
+
+    with pytest.raises(SystemExit) as excinfo:
+        _load_settings(model=None, max_iterations=None)
+
+    assert excinfo.value.code == 2
+    assert "Configuration error" in capsys.readouterr().err
