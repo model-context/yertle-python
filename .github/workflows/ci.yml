@@ -20,3 +20,75 @@ jobs:
       - run: make install
 
       - run: make check
+
+  # Gates coverage on the lines this PR touched, not on the repo total. A total
+  # floor punishes unrelated work and invites gaming; a diff floor asks exactly
+  # one thing — test what you just wrote.
+  diff-coverage:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # diff-cover diffs against the base branch, so it needs real history
+          # rather than the default single-commit checkout.
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - run: uv python install 3.11
+
+      - run: make install
+
+      - run: git fetch --no-tags origin ${{ github.base_ref }}
+
+      - name: Coverage on changed lines
+        run: |
+          uv run pytest --cov --cov-report=xml
+          uv run diff-cover coverage.xml \
+            --compare-branch=origin/${{ github.base_ref }} \
+            --fail-under=80 \
+            --markdown-report=diff-coverage.md
+
+      - name: Publish report to the job summary
+        if: always()
+        run: cat diff-coverage.md >> "$GITHUB_STEP_SUMMARY" || true
+
+  # Advisory, not blocking. These report the two signals that measurably degrade
+  # as generated code accumulates — duplicated blocks and unreferenced public
+  # symbols — neither of which ruff or pyright can see. Results land in the job
+  # summary so the trend is visible on every PR without gating merges yet.
+  hygiene:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - run: uv python install 3.11
+
+      - run: make install
+
+      - name: Dead code (vulture)
+        run: |
+          {
+            echo '## Dead code'
+            echo '```'
+            uv run vulture || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Duplication (jscpd)
+        run: |
+          {
+            echo '## Duplication'
+            echo '```'
+            npx --yes jscpd@4 src --min-lines 8 --min-tokens 50 \
+              --reporters consoleFull --threshold 100 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

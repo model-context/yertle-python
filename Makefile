@@ -30,6 +30,31 @@ test: ## Run the test suite
 check: lint format-check typecheck test ## Run every check CI runs
 
 # ---------------------------------------------------------------------------
+# Coverage
+# ---------------------------------------------------------------------------
+coverage: ## Run the suite with coverage and write coverage.xml
+	uv run pytest --cov --cov-report=term-missing --cov-report=xml
+
+diff-coverage: coverage ## Fail if lines changed vs main are under-tested
+	uv run diff-cover coverage.xml --compare-branch=origin/main --fail-under=80
+
+# ---------------------------------------------------------------------------
+# Hygiene (advisory — reports, does not gate)
+# ---------------------------------------------------------------------------
+# These two target the failure modes that show up in generated code and that
+# ruff/pyright structurally cannot see: near-duplicate blocks, and public
+# symbols nothing calls any more. Neither blocks a merge today; both are
+# reported on every PR so the trend is visible.
+hygiene: deadcode duplication ## Run all advisory hygiene reports
+
+deadcode: ## Report unused public symbols (vulture; config in pyproject.toml)
+	@uv run vulture || true
+
+duplication: ## Report duplicated blocks (jscpd; requires node/npx)
+	@npx --yes jscpd@4 src --min-lines 8 --min-tokens 50 \
+	  --reporters consoleFull --threshold 100 || true
+
+# ---------------------------------------------------------------------------
 # SRE agent passthroughs (require `uv sync --extra sre`)
 # ---------------------------------------------------------------------------
 ask: ## Ask the agent a one-shot question (usage: make ask Q="your question")
@@ -53,4 +78,5 @@ clean: ## Remove caches and build artifacts
 	rm -rf .ruff_cache .pytest_cache .pyright build dist *.egg-info
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +
 
-.PHONY: help install lint fix format format-check typecheck test check ask repl status precommit clean
+.PHONY: help install lint fix format format-check typecheck test check coverage \
+        diff-coverage hygiene deadcode duplication ask repl status precommit clean

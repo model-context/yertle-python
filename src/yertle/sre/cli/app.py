@@ -156,7 +156,13 @@ def _load_settings(*, model: str | None, max_iterations: int | None) -> Settings
         overrides["max_iterations"] = max_iterations
     try:
         return Settings(**overrides)
-    except Exception as exc:
+    # BLE001 suppressed deliberately, not incidentally: this is a CLI entry
+    # boundary whose job is to turn *any* settings-construction failure into a
+    # one-line message and exit 2, rather than a traceback. pydantic-settings
+    # raises ValidationError for bad values but other types for a malformed
+    # .env, and the user-facing behavior should not depend on which. The error
+    # is reported, never swallowed — that is what the rule exists to prevent.
+    except Exception as exc:  # noqa: BLE001
         err_console.print(f"[red]Configuration error:[/red] {exc}")
         sys.exit(2)
 
