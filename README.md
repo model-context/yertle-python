@@ -16,7 +16,7 @@ That puts three commands on your PATH:
 
 | Command | What it does |
 |---|---|
-| `yertle` | CLI — `version`, `login`, `orgs list`, `auth status` |
+| `yertle` | CLI — `version`, `login`, `orgs list`, `nodes list`, `auth status` |
 | `yertle-sre` | Natural-language SRE agent |
 | `yertle-mcp` | MCP server for AI agents |
 

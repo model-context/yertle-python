@@ -43,9 +43,22 @@ def test_yertle_run_respects_existing_format_flag(fake_cli):
     assert "json" not in captured[0]
 
 
+def test_yertle_run_allows_the_nodes_group(fake_cli):
+    """Landing a CLI command means widening the agent's allowlist too."""
+    captured: list[list[str]] = []
+
+    def respond(argv):
+        captured.append(argv)
+        return FakeCompleted(stdout="[]", stderr="", returncode=0)
+
+    fake_cli(respond)
+    yertle_run.invoke({"argv": ["nodes", "list"]})
+    assert captured[0] == ["yertle", "nodes", "list", "--format", "json"]
+
+
 def test_yertle_run_refuses_unlisted(fake_cli):
     fake_cli(lambda _argv: FakeCompleted(stdout="leak", stderr="", returncode=0))
-    for cmd in ("login", "auth", "version", "nodes", "tree", "canvas"):
+    for cmd in ("login", "auth", "version", "tree", "canvas"):
         out = yertle_run.invoke({"argv": [cmd]})
         assert out.startswith("refused"), f"should refuse {cmd}"
         assert "leak" not in out
