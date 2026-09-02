@@ -19,7 +19,7 @@ from yertle.sre.tools._shell import run_cli
 # never had (`nodes`, `tree`, `canvas`, `about`, `config`), so the agent was
 # being told to call things that could only fail. Grow this as Slice 3 lands
 # commands — see yertle/docs/notes/features/yertle-python/IMPLEMENTATION_PLAN.md.
-YERTLE_READ_COMMANDS: frozenset[str] = frozenset({"orgs"})
+YERTLE_READ_COMMANDS: frozenset[str] = frozenset({"nodes", "orgs"})
 
 
 @tool
@@ -33,10 +33,12 @@ def yertle_run(argv: list[str]) -> str:
 
     Available shapes:
 
-        yertle_run(["orgs", "list"])   # list organizations
+        yertle_run(["orgs", "list"])                    # list organizations
+        yertle_run(["nodes", "list"])                   # nodes across every org
+        yertle_run(["nodes", "list", "--org", "<id>"])  # nodes in one org
 
-    That is currently the whole read surface. Node, tree and search commands
-    are being added; until they appear here, they are not callable.
+    That is currently the whole read surface. Tree, search and per-node detail
+    commands are being added; until they appear here, they are not callable.
 
     Anything outside the allowed set (login, auth, version) is refused.
     """
