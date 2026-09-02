@@ -6,7 +6,9 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from yertle.cli.main import _is_edge_rejection, _mask_token, _web_url_for, app
+from yertle.cli.commands.auth import _mask_token
+from yertle.cli.commands.login import _web_url_for
+from yertle.cli.main import app
 from yertle.shared import auth as auth_mod
 
 runner = CliRunner()
@@ -127,26 +129,12 @@ def test_web_url_for(api_url: str, expected: str | None) -> None:
     assert _web_url_for(api_url) == expected
 
 
-@pytest.mark.parametrize(
-    ("body", "expected"),
-    [
-        (b'{"message":"Unauthorized"}', True),  # API Gateway authorizer
-        (b'{"detail":"Invalid or expired token"}', False),  # FastAPI, app-level
-        (b'{"detail":"Authorization header required"}', False),
-        (b"not json at all", False),
-        (b"", False),
-    ],
-)
-def test_is_edge_rejection(body: bytes, expected: bool) -> None:
-    assert _is_edge_rejection(body) is expected
-
-
 def test_login_rejects_an_empty_token(
     isolated_config: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An empty token would persist a config that resolves as unauthenticated."""
-    monkeypatch.setattr("yertle.cli.main.typer.prompt", lambda *a, **k: "   ")
+    monkeypatch.setattr("yertle.cli.commands.login.typer.prompt", lambda *a, **k: "   ")
 
     result = runner.invoke(app, ["login", "--api-url", "http://localhost:8000"])
 
