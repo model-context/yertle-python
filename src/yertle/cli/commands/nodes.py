@@ -67,20 +67,28 @@ def list_nodes(org: OrgOption = None, fmt: FormatOption = Format.TABLE) -> None:
     )
 
 
-# Entries carry the path of their *parent*, and the backend uses "" for
-# top-level. Normalising to "/" here keeps the grouping key uniform.
 _ROOT = "/"
 
 
 def _full_path(entry: HierarchyEntryResponse) -> str:
     """The path of the entry itself, which is what its children are keyed by.
 
-    Titles are sanitised because a "/" inside one would otherwise forge a path
-    separator and silently reparent the node's children.
+    Entries carry the path of their *parent*, absolute and slash-prefixed. As
+    returned by `GET /orgs/{id}/hierarchy`, a root node has path "/" and its
+    children have path "/Root"; a grandchild has "/Root/Yertle Webapp".
+
+    So the leading slash is load-bearing. Building a root's own path as
+    "Root" rather than "/Root" makes every child lookup miss, and the tree
+    silently collapses to just its root nodes — which is exactly what shipped
+    the first time.
+
+    Titles are sanitised the same way the backend does when it builds these
+    paths (`_sanitize_title` in `node_hierarchy_directories.py` replaces "/"
+    with "-"), so a title containing a slash still matches its children.
     """
     parent = entry.path or _ROOT
     title = entry.title.replace("/", "-")
-    return f"{title}" if parent == _ROOT else f"{parent}/{title}"
+    return f"{_ROOT}{title}" if parent == _ROOT else f"{parent}/{title}"
 
 
 def _add_branch(
@@ -104,16 +112,47 @@ def _add_branch(
         _add_branch(branch, child, children_of, seen)
 
 
-def _build_tree(entries: list[HierarchyEntryResponse], label: str) -> Tree:
-    """Assemble a Rich tree from the flat, parent-path-keyed entry list."""
+def _attach(parent: Tree, entries: list[HierarchyEntryResponse]) -> None:
+    """Build one org's hierarchy under `parent`."""
     children_of: dict[str, list[HierarchyEntryResponse]] = defaultdict(list)
     for entry in entries:
         children_of[entry.path or _ROOT].append(entry)
 
-    tree = Tree(label)
     seen: set[str] = set()
     for entry in sorted(children_of.get(_ROOT, []), key=lambda e: e.title):
-        _add_branch(tree, entry, children_of, seen)
+        _add_branch(parent, entry, children_of, seen)
+
+
+def _group_by_org(
+    entries: list[HierarchyEntryResponse],
+) -> dict[tuple[str, str], list[HierarchyEntryResponse]]:
+    """Split entries by organization, preserving first-seen order.
+
+    Paths are only unique *within* an org — two orgs that each have a node
+    called "Root" both produce children at "/Root". Grouping before building
+    is what stops one org's children being attached to another's tree, and is
+    why the Go implementation grouped first too.
+    """
+    groups: dict[tuple[str, str], list[HierarchyEntryResponse]] = defaultdict(list)
+    for entry in entries:
+        org_id = entry.org_id if isinstance(entry.org_id, str) else ""
+        org_name = entry.org_name if isinstance(entry.org_name, str) else org_id
+        groups[(org_id, org_name)].append(entry)
+    return groups
+
+
+def _build_tree(entries: list[HierarchyEntryResponse], label: str) -> Tree:
+    """Assemble a Rich tree from the flat, parent-path-keyed entry list."""
+    tree = Tree(label)
+    groups = _group_by_org(entries)
+    if len(groups) == 1:
+        _attach(tree, next(iter(groups.values())))
+        return tree
+
+    # More than one org in play: give each its own branch, so identical paths
+    # in different orgs cannot collide and the reader can tell them apart.
+    for (org_id, org_name), org_entries in groups.items():
+        _attach(tree.add(f"[bold]{org_name}[/bold]  [dim]{org_id}[/dim]"), org_entries)
     return tree
 
 
