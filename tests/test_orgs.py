@@ -41,7 +41,7 @@ def _fake_response() -> OrganizationListResponse:
 @patch("yertle.cli.main.list_organizations_orgs_get.sync", return_value=_fake_response())
 @patch("yertle.cli.main.auth.get_client", return_value=object())
 def test_orgs_table_format(_get_client, _sync) -> None:
-    result = runner.invoke(app, ["orgs"])
+    result = runner.invoke(app, ["orgs", "list"])
     assert result.exit_code == 0, result.output
     assert "Acme" in result.output
     assert "Beta Corp" in result.output
@@ -51,7 +51,7 @@ def test_orgs_table_format(_get_client, _sync) -> None:
 @patch("yertle.cli.main.list_organizations_orgs_get.sync", return_value=_fake_response())
 @patch("yertle.cli.main.auth.get_client", return_value=object())
 def test_orgs_json_format(_get_client, _sync) -> None:
-    result = runner.invoke(app, ["orgs", "--format", "json"])
+    result = runner.invoke(app, ["orgs", "list", "--format", "json"])
     assert result.exit_code == 0, result.output
     parsed = json.loads(result.output)
     assert len(parsed) == 2
