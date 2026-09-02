@@ -55,6 +55,17 @@ class Column(Generic[T]):
     no_wrap: bool = False
 
 
+def dump_json(rows: Sequence[WireModel]) -> None:
+    """Print rows as JSON.
+
+    Split out from `render` because not every command's display half is a
+    table — `nodes tree` draws a tree — but every command's machine-readable
+    half is the same. Shared here so `--format json` cannot drift between
+    commands.
+    """
+    typer.echo(json.dumps([row.to_dict() for row in rows], indent=2, default=str))
+
+
 def render(
     rows: Sequence[T],
     *,
@@ -69,7 +80,7 @@ def render(
     than whichever subset of fields the table happens to show.
     """
     if fmt is Format.JSON:
-        typer.echo(json.dumps([row.to_dict() for row in rows], indent=2, default=str))
+        dump_json(rows)
         return
 
     table = Table(title=title)
@@ -88,4 +99,12 @@ def display_path(path: Path) -> str:
         return str(path)
 
 
-__all__ = ["Column", "Format", "FormatOption", "WireModel", "display_path", "render"]
+__all__ = [
+    "Column",
+    "Format",
+    "FormatOption",
+    "WireModel",
+    "display_path",
+    "dump_json",
+    "render",
+]

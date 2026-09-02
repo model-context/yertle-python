@@ -1,14 +1,17 @@
 """`yertle nodes` — work with nodes."""
 
+from collections import defaultdict
 from typing import Any
 
 import typer
-from yertle_client.models import NodeResponse
+from rich.console import Console
+from rich.tree import Tree
+from yertle_client.models import HierarchyEntryResponse, NodeResponse
 
 import yertle
 from yertle.cli._context import OrgOption, resolve_org
 from yertle.cli._errors import api_errors
-from yertle.cli._render import Column, Format, FormatOption, render
+from yertle.cli._render import Column, Format, FormatOption, dump_json, render
 
 app = typer.Typer(
     name="nodes",
@@ -62,3 +65,74 @@ def list_nodes(org: OrgOption = None, fmt: FormatOption = Format.TABLE) -> None:
         columns=[*BASE_COLUMNS, ORG_COLUMN] if across_orgs else BASE_COLUMNS,
         title=f"Nodes in {scope} ({len(nodes)})",
     )
+
+
+# Entries carry the path of their *parent*, and the backend uses "" for
+# top-level. Normalising to "/" here keeps the grouping key uniform.
+_ROOT = "/"
+
+
+def _full_path(entry: HierarchyEntryResponse) -> str:
+    """The path of the entry itself, which is what its children are keyed by.
+
+    Titles are sanitised because a "/" inside one would otherwise forge a path
+    separator and silently reparent the node's children.
+    """
+    parent = entry.path or _ROOT
+    title = entry.title.replace("/", "-")
+    return f"{title}" if parent == _ROOT else f"{parent}/{title}"
+
+
+def _add_branch(
+    tree: Tree,
+    entry: HierarchyEntryResponse,
+    children_of: dict[str, list[HierarchyEntryResponse]],
+    seen: set[str],
+) -> None:
+    """Attach `entry` to `tree`, recursing into directories.
+
+    `seen` guards against a malformed hierarchy pointing back at itself; the
+    backend should never produce one, but an infinite recursion in a read-only
+    display command is a bad way to find out.
+    """
+    branch = tree.add(f"{entry.title}  [dim]{entry.node_id}[/dim]")
+    path = _full_path(entry)
+    if not entry.is_directory or path in seen:
+        return
+    seen.add(path)
+    for child in sorted(children_of.get(path, []), key=lambda e: e.title):
+        _add_branch(branch, child, children_of, seen)
+
+
+def _build_tree(entries: list[HierarchyEntryResponse], label: str) -> Tree:
+    """Assemble a Rich tree from the flat, parent-path-keyed entry list."""
+    children_of: dict[str, list[HierarchyEntryResponse]] = defaultdict(list)
+    for entry in entries:
+        children_of[entry.path or _ROOT].append(entry)
+
+    tree = Tree(label)
+    seen: set[str] = set()
+    for entry in sorted(children_of.get(_ROOT, []), key=lambda e: e.title):
+        _add_branch(tree, entry, children_of, seen)
+    return tree
+
+
+@app.command("tree")
+def tree_nodes(org: OrgOption = None, fmt: FormatOption = Format.TABLE) -> None:
+    """Show the containment hierarchy — what contains what."""
+    org_id = resolve_org(org)
+
+    with api_errors():
+        entries = yertle.nodes.tree(org_id)
+
+    if fmt is Format.JSON:
+        dump_json(entries)
+        return
+
+    if not entries:
+        typer.echo("No nodes found.")
+        return
+
+    across_orgs = org_id == yertle.nodes.ALL_ORGS
+    scope = "all organizations" if across_orgs else f"org {org_id}"
+    Console().print(_build_tree(entries, f"Hierarchy in {scope} ({len(entries)})"))

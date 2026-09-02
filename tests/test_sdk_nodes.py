@@ -9,7 +9,12 @@ import datetime
 from unittest.mock import patch
 
 import pytest
-from yertle_client.models import NodeListResponse, NodeResponse
+from yertle_client.models import (
+    HierarchyEntryResponse,
+    HierarchyResponse,
+    NodeListResponse,
+    NodeResponse,
+)
 
 import yertle
 
@@ -92,3 +97,39 @@ def test_list_rejects_a_non_uuid_org(_get_client) -> None:
 def test_list_raises_on_an_unexpected_response(_get_client, _sync) -> None:
     with pytest.raises(RuntimeError, match="Unexpected response"):
         yertle.nodes.list(ORG)
+
+
+_TREE_ORG_SCOPED = "yertle.nodes.get_org_hierarchy_orgs_org_id_hierarchy_get.sync"
+_TREE_CROSS_ORG = "yertle.nodes.get_all_orgs_hierarchy_orgs_all_hierarchy_get.sync"
+
+
+def _hierarchy() -> HierarchyResponse:
+    entry = HierarchyEntryResponse(
+        node_id="n1",
+        title="Platform",
+        path="/",
+        depth=0,
+        is_directory=True,
+    )
+    return HierarchyResponse(entries=[entry], total=1)
+
+
+@patch(_TREE_ORG_SCOPED, return_value=_hierarchy())
+@patch("yertle._client.get_client", return_value=object())
+def test_tree_unwraps_to_entries(_get_client, _sync) -> None:
+    entries = yertle.nodes.tree(ORG)
+    assert [e.title for e in entries] == ["Platform"]
+
+
+@patch(_TREE_CROSS_ORG, return_value=_hierarchy())
+@patch("yertle._client.get_client", return_value=object())
+def test_tree_defaults_to_the_cross_org_endpoint(_get_client, sync) -> None:
+    assert len(yertle.nodes.tree()) == 1
+    assert "org_id" not in sync.call_args.kwargs
+
+
+@patch(_TREE_ORG_SCOPED, return_value=None)
+@patch("yertle._client.get_client", return_value=object())
+def test_tree_raises_on_an_unexpected_response(_get_client, _sync) -> None:
+    with pytest.raises(RuntimeError, match="Unexpected response"):
+        yertle.nodes.tree(ORG)
