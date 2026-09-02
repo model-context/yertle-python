@@ -217,8 +217,16 @@ def login(
     typer.echo(f"✓ Saved credentials to {auth.CONFIG_PATH}")
 
 
-@app.command()
-def orgs(
+orgs_app = typer.Typer(
+    name="orgs",
+    help="Work with organizations.",
+    no_args_is_help=True,
+)
+app.add_typer(orgs_app)
+
+
+@orgs_app.command("list")
+def orgs_list(
     format: str = typer.Option(
         "table",
         "--format",

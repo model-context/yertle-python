@@ -14,9 +14,12 @@ from langchain_core.tools import tool
 
 from yertle.sre.tools._shell import run_cli
 
-YERTLE_READ_COMMANDS: frozenset[str] = frozenset(
-    {"orgs", "nodes", "tree", "canvas", "about", "config"},
-)
+# Must stay a subset of the commands the CLI actually implements. The previous
+# value was copied from the Go CLI and listed five commands the Python CLI has
+# never had (`nodes`, `tree`, `canvas`, `about`, `config`), so the agent was
+# being told to call things that could only fail. Grow this as Slice 3 lands
+# commands — see yertle/docs/notes/features/yertle-python/IMPLEMENTATION_PLAN.md.
+YERTLE_READ_COMMANDS: frozenset[str] = frozenset({"orgs"})
 
 
 @tool
@@ -26,23 +29,16 @@ def yertle_run(argv: list[str]) -> str:
     `argv` is the argument list after `yertle`. `--format json` is appended
     automatically if no `--format` flag is already present.
 
-    Common shapes:
+    Commands are noun-then-verb, like `gh` and the AWS CLI.
 
-        yertle_run(["orgs"])                     # list organizations
-        yertle_run(["orgs", "<org-id>"])         # one org's details
-        yertle_run(["nodes"])                    # list nodes in default org
-        yertle_run(["nodes", "--org", "<id>"])   # list nodes in a given org
-        yertle_run(["nodes", "<node-id>"])       # one node's full details
-                                                  # (tags, connections, attrs)
-        yertle_run(["tree"])                     # containment hierarchy
-        yertle_run(["canvas", "<node-id>"])      # child layout for a node
+    Available shapes:
 
-    Use `nodes <node-id>` as your primary way to resolve a component name
-    into its underlying AWS / GitHub identifiers — node attributes typically
-    include AWS resource IDs, GitHub repo URLs, owners, etc.
+        yertle_run(["orgs", "list"])   # list organizations
 
-    Allowed top-level commands: orgs, nodes, tree, canvas, about, config.
-    Anything else (login, auth, monitor, debug) is refused.
+    That is currently the whole read surface. Node, tree and search commands
+    are being added; until they appear here, they are not callable.
+
+    Anything outside the allowed set (login, auth, version) is refused.
     """
     if not argv:
         return "refused: yertle_run requires at least one argument."
