@@ -36,9 +36,12 @@ def yertle_run(argv: list[str]) -> str:
         yertle_run(["orgs", "list"])                    # list organizations
         yertle_run(["nodes", "list"])                   # nodes across every org
         yertle_run(["nodes", "list", "--org", "<id>"])  # nodes in one org
+        yertle_run(["nodes", "tree"])                   # containment hierarchy
 
-    That is currently the whole read surface. Tree, search and per-node detail
-    commands are being added; until they appear here, they are not callable.
+    `nodes tree` is the fastest way to see what contains what; `nodes list`
+    gives counts per node. That is currently the whole read surface. Search and
+    per-node detail commands are being added; until they appear here, they are
+    not callable.
 
     Anything outside the allowed set (login, auth, version) is refused.
     """
