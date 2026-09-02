@@ -4,14 +4,12 @@ Mocks the wire layer so the tests run without a backend or credentials.
 """
 
 import datetime
-from collections.abc import Iterator
 from unittest.mock import patch
 
 import pytest
 from yertle_client.models import OrganizationListResponse, OrganizationResponse
 
 import yertle
-from yertle import _client as _client_module
 
 
 def _fake_org(org_id: str, name: str) -> OrganizationResponse:
@@ -30,14 +28,6 @@ def _fake_list() -> OrganizationListResponse:
         organizations=[_fake_org("org-1", "Acme"), _fake_org("org-2", "Beta")],
         total=2,
     )
-
-
-@pytest.fixture(autouse=True)
-def reset_default_client() -> Iterator[None]:  # pyright: ignore[reportUnusedFunction]
-    """Ensure each test starts with a fresh lazy-init cache."""
-    _client_module._default_client = None  # pyright: ignore[reportPrivateUsage]
-    yield
-    _client_module._default_client = None  # pyright: ignore[reportPrivateUsage]
 
 
 @patch("yertle.orgs.list_organizations_orgs_get.sync", return_value=_fake_list())

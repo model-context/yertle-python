@@ -24,6 +24,7 @@ SRC = Path(__file__).resolve().parent.parent / "src" / "yertle"
 
 AUTH_MODULE = SRC / "shared" / "auth.py"
 SHELL_MODULE = SRC / "sre" / "tools" / "_shell.py"
+CLI_PACKAGE = SRC / "cli"
 
 CREDENTIAL_ENV_VARS = ("YERTLE_TOKEN", "YERTLE_API_URL")
 
@@ -88,6 +89,41 @@ def test_config_path_is_not_reconstructed(source_files: list[Path]) -> None:
     assert not offenders, (
         "Import `auth.CONFIG_PATH` rather than rebuilding the config path:\n  "
         + "\n  ".join(offenders)
+    )
+
+
+def test_cli_calls_the_sdk_not_the_wire_layer(source_files: list[Path]) -> None:
+    """CLI commands go through `yertle.<resource>`, never `yertle_client.api`.
+
+    Both layers can reach the same endpoint, so the tempting shortcut in a new
+    command is to import the generated function directly. Taking it gives the
+    endpoint two implementations — one the CLI uses, one library users get —
+    which then drift in their error handling and response unwrapping. Routing
+    the CLI through the SDK also means every command ships an SDK function,
+    rather than the two surfaces being built twice.
+
+    Wire *types* stay allowed: rendering and error handling legitimately name
+    `yertle_client.errors` and `yertle_client.models`.
+    """
+    offenders: list[str] = []
+    for path in source_files:
+        if CLI_PACKAGE not in path.parents:
+            continue
+        for node in ast.walk(_parse(path)):
+            if isinstance(node, ast.ImportFrom) and (node.module or "").startswith(
+                "yertle_client.api",
+            ):
+                offenders.append(f"{_rel(path)}:{node.lineno} imports {node.module}")
+            elif isinstance(node, ast.Import):
+                offenders.extend(
+                    f"{_rel(path)}:{node.lineno} imports {alias.name}"
+                    for alias in node.names
+                    if alias.name.startswith("yertle_client.api")
+                )
+
+    assert not offenders, (
+        "CLI commands must call the SDK (`yertle.orgs`, `yertle.nodes`, …) rather "
+        "than the generated wire layer:\n  " + "\n  ".join(offenders)
     )
 
 

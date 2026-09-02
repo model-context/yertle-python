@@ -31,7 +31,11 @@ if an invariant genuinely needs to change, change it deliberately and say why.
    truncation, and uniform `ShellResult` shape live.
 3. **The SRE agent's tools are read-only.** `settings.allow_writes` exists but no
    mutating tool ships. Adding one is a product decision, not a refactor.
-4. **The MCP server is read-only by construction** — the `RouteMap` filter in
+4. **CLI commands call the SDK, not the generated wire layer.** Nothing under
+   `cli/` imports `yertle_client.api.*`; it goes through `yertle.orgs`,
+   `yertle.nodes`, and so on. One implementation per endpoint, shared with
+   library users.
+5. **The MCP server is read-only by construction** — the `RouteMap` filter in
    `mcp/server.py` mounts GET operations and excludes everything else. Keep the
    catch-all `EXCLUDE` route last.
 
@@ -52,6 +56,21 @@ if an invariant genuinely needs to change, change it deliberately and say why.
   in `sre/tools/`, add it to `ALL_TOOLS` in `sre/tools/__init__.py`. That is the
   whole extension surface. Translate non-zero exits into short model-readable
   messages; never dump raw stderr at the model.
+- **New CLI commands are a module per noun group.** One file in
+  `cli/commands/`, wired up in `cli/main.py` — a `typer.Typer` named `app` for
+  a noun with verbs (`orgs list`, `orgs show`), a plain function for a bare
+  command (`version`). Commands are noun-then-verb like `gh` and the AWS CLI; a
+  bare noun prints help, never a default action. Declare columns and call
+  `_render.render()` rather than building tables inline, and wrap API calls in
+  `_errors.api_errors()` rather than writing your own try/except. `main.py` is
+  a composition root — no command logic belongs in it.
+- **The CLI calls the SDK, never `yertle_client` directly.** Both can reach the
+  same endpoint; using the wire layer gives that endpoint two implementations
+  that drift in error handling and unwrapping. Routing through `yertle.orgs`,
+  `yertle.nodes`, … also means each new command ships the SDK function it
+  needs, instead of the two surfaces being built twice. Enforced by
+  `test_cli_calls_the_sdk_not_the_wire_layer`. Wire *types*
+  (`yertle_client.models`, `.errors`) stay fine to import.
 - **Errors reaching a user are sentences, not tracebacks.** `AuthError`'s message
   *is* the user-facing text. The CLI catches `UnexpectedStatus` and renders a
   URL-aware explanation. Preserve that when touching error paths.
