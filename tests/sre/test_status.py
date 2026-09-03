@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+import datetime
+from unittest.mock import patch
+
+from yertle_client.models import OrganizationListResponse, OrganizationResponse
+
 from tests.sre.conftest import FakeCompleted
+from yertle.shared import auth as auth_mod
 from yertle.sre.cli.status import (
     probe_all,
     probe_anthropic,
@@ -10,6 +16,18 @@ from yertle.sre.cli.status import (
     probe_gh,
     probe_yertle,
 )
+
+
+def _orgs_response() -> OrganizationListResponse:
+    now = datetime.datetime(2026, 9, 2, tzinfo=datetime.UTC)
+    org = OrganizationResponse(
+        id="org-1",
+        name="Acme",
+        public_id="acme",
+        created_at=now,
+        updated_at=now,
+    )
+    return OrganizationListResponse(organizations=[org], total=1)
 
 
 def test_probe_anthropic_set(monkeypatch):
@@ -26,20 +44,32 @@ def test_probe_anthropic_unset(monkeypatch):
     assert "ANTHROPIC_API_KEY" in result.detail
 
 
-def test_probe_yertle_success(fake_cli):
-    fake_cli(lambda _argv: FakeCompleted(stdout="[]", stderr="", returncode=0))
+@patch("yertle.orgs.list_organizations_orgs_get.sync", return_value=_orgs_response())
+@patch("yertle._client.get_client", return_value=object())
+def test_probe_yertle_success(_get_client, _sync, monkeypatch):
+    monkeypatch.setenv("YERTLE_API_URL", "https://api.example.test")
+    monkeypatch.setenv("YERTLE_TOKEN", "yrt_test")
     result = probe_yertle()
     assert result.ok
-    assert result.detail == "authenticated"
+    assert "api.example.test" in result.detail
 
 
-def test_probe_yertle_failure(fake_cli):
-    fake_cli(
-        lambda _argv: FakeCompleted(stdout="", stderr="auth: not logged in", returncode=1),
-    )
+def test_probe_yertle_reports_missing_credentials(monkeypatch, tmp_path):
+    """No token must read as unauthenticated, not as a crash."""
+    monkeypatch.delenv("YERTLE_TOKEN", raising=False)
+    monkeypatch.setattr(auth_mod, "CONFIG_PATH", tmp_path / "config.json")
     result = probe_yertle()
     assert not result.ok
-    assert "yertle login" in result.detail
+
+
+@patch("yertle.orgs.list_organizations_orgs_get.sync", side_effect=ConnectionError("boom"))
+@patch("yertle._client.get_client", return_value=object())
+def test_probe_yertle_reports_an_unreachable_api(_get_client, _sync, monkeypatch):
+    """Probes never raise — a dead backend is a result, not an exception."""
+    monkeypatch.setenv("YERTLE_TOKEN", "yrt_test")
+    result = probe_yertle()
+    assert not result.ok
+    assert "ConnectionError" in result.detail
 
 
 def test_probe_aws_success_extracts_arn(fake_cli, monkeypatch):
