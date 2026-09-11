@@ -59,6 +59,7 @@ class Source(StrEnum):
     / `~/.yertle/config.json` labels) belongs to the CLI, not here.
     """
 
+    FLAG = "flag"
     ENV = "env"
     CONFIG = "config"
     DEFAULT = "default"
@@ -98,11 +99,11 @@ def _read_config() -> dict[str, str]:
         ) from e
 
 
-def save_credentials(api_url: str, token: str) -> None:
-    """Persist `api_url` and `token` to ~/.yertle/config.json.
+def _write_config(updates: dict[str, str]) -> None:
+    """Merge `updates` into ~/.yertle/config.json.
 
-    Merges into any existing config rather than replacing it, so keys this
-    version does not know about survive a re-login.
+    Merges rather than replaces, so keys this version does not know about
+    survive — and so writing one setting cannot drop another.
 
     Writes via a temp file in the same directory plus `os.replace`, which is
     atomic: an interrupted or failed write cannot truncate a working config,
@@ -115,7 +116,7 @@ def save_credentials(api_url: str, token: str) -> None:
     CONFIG_PATH.parent.chmod(_CONFIG_DIR_MODE)
 
     config = _read_config()
-    config.update({"api_url": api_url, "token": token})
+    config.update(updates)
 
     fd, tmp_name = tempfile.mkstemp(dir=CONFIG_PATH.parent, prefix=".config-", suffix=".json")
     tmp_path = Path(tmp_name)
@@ -128,6 +129,35 @@ def save_credentials(api_url: str, token: str) -> None:
     except BaseException:
         tmp_path.unlink(missing_ok=True)
         raise
+
+
+def save_credentials(api_url: str, token: str) -> None:
+    """Persist `api_url` and `token` to ~/.yertle/config.json."""
+    _write_config({"api_url": api_url, "token": token})
+
+
+def configured_org() -> str | None:
+    """Return the organization persisted in the config file, if any.
+
+    Org is not a credential, so its precedence chain lives with the other CLI
+    context in `cli/_context.py`. What lives *here* is the file access: this
+    module owns `~/.yertle/config.json`, and a second module reading or writing
+    it would fork the definition of where config lives (invariant 1).
+
+    If a third non-credential key ever lands here, split the file-owning half
+    into `shared/config.py` and let this module consume it.
+    """
+    return _read_config().get("org") or None
+
+
+def save_org(org: str) -> None:
+    """Persist the default organization, leaving credentials untouched.
+
+    Reuses `save_credentials`' merge-and-atomically-replace path so the file
+    keeps its 0600 mode and an interrupted write cannot strand a config with a
+    token but no URL.
+    """
+    _write_config({"org": org})
 
 
 def resolve() -> ResolvedCredentials:

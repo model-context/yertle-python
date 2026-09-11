@@ -14,12 +14,28 @@ from langchain_core.tools import tool
 
 from yertle.sre.tools._shell import run_cli
 
-# Must stay a subset of the commands the CLI actually implements. The previous
-# value was copied from the Go CLI and listed five commands the Python CLI has
-# never had (`nodes`, `tree`, `canvas`, `about`, `config`), so the agent was
-# being told to call things that could only fail. Grow this as Slice 3 lands
-# commands — see yertle/docs/notes/features/yertle-python/IMPLEMENTATION_PLAN.md.
-YERTLE_READ_COMMANDS: frozenset[str] = frozenset({"nodes", "orgs"})
+# Allowlisted (noun, verb) pairs — NOT bare nouns.
+#
+# Gating on the noun alone was safe only while every verb under it read. It
+# stopped being safe the moment `orgs use` landed: that writes the user's
+# config file, and an argv[0] check would have waved it straight through,
+# quietly breaking the read-only invariant in CLAUDE.md.
+#
+# Must stay a subset of what the CLI actually implements — an earlier version
+# was copied from the Go CLI and advertised five commands this CLI never had,
+# so the agent was told to call things that could only fail. Both properties
+# are enforced by tests/sre/test_tools_yertle.py.
+YERTLE_READ_COMMANDS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("orgs", "list"),
+        ("nodes", "list"),
+        ("nodes", "tree"),
+    },
+)
+
+# Every allowlisted command is a (noun, verb) pair, so an argv shorter than
+# this cannot name one.
+_NOUN_VERB = 2
 
 
 @tool
@@ -43,15 +59,17 @@ def yertle_run(argv: list[str]) -> str:
     per-node detail commands are being added; until they appear here, they are
     not callable.
 
-    Anything outside the allowed set (login, auth, version) is refused.
+    Every call needs a noun AND a verb. Anything outside the allowed set is
+    refused — including write commands such as `orgs use`, which changes the
+    user's saved configuration.
     """
-    if not argv:
-        return "refused: yertle_run requires at least one argument."
+    allowed = sorted(" ".join(pair) for pair in YERTLE_READ_COMMANDS)
+    if len(argv) < _NOUN_VERB:
+        return f"refused: yertle_run needs a noun and a verb. Allowed: {allowed}."
 
-    if argv[0] not in YERTLE_READ_COMMANDS:
+    if (argv[0], argv[1]) not in YERTLE_READ_COMMANDS:
         return (
-            f"refused: 'yertle {argv[0]}' is not a read-only command. "
-            f"Allowed: {sorted(YERTLE_READ_COMMANDS)}."
+            f"refused: 'yertle {argv[0]} {argv[1]}' is not a read-only command. Allowed: {allowed}."
         )
 
     full_argv = ["yertle", *argv]

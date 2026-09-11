@@ -31,6 +31,10 @@ if an invariant genuinely needs to change, change it deliberately and say why.
    truncation, and uniform `ShellResult` shape live.
 3. **The SRE agent's tools are read-only.** `settings.allow_writes` exists but no
    mutating tool ships. Adding one is a product decision, not a refactor.
+   `YERTLE_READ_COMMANDS` allowlists **(noun, verb) pairs, never bare nouns** —
+   gating on the noun alone admits every verb under it, which is how `orgs use`
+   (a write) would have been waved through. Enforced by
+   `test_allowlist_admits_no_write_commands`.
 4. **CLI commands call the SDK, not the generated wire layer.** Nothing under
    `cli/` imports `yertle_client.api.*`; it goes through `yertle.orgs`,
    `yertle.nodes`, and so on. One implementation per endpoint, shared with
@@ -64,6 +68,12 @@ if an invariant genuinely needs to change, change it deliberately and say why.
   `_render.render()` rather than building tables inline, and wrap API calls in
   `_errors.api_errors()` rather than writing your own try/except. `main.py` is
   a composition root — no command logic belongs in it.
+- **Context resolves flag → env → config file → default.** `--org`, then
+  `$YERTLE_ORG`, then `~/.yertle/config.json`, then every org — the same
+  per-key shape `shared/auth.py` uses for the token and API URL, and the
+  provenance is reported so `yertle auth status` can explain which rung won.
+  Only `shared/auth.py` touches the config file; `cli/_context.py` decides
+  which rung wins.
 - **The CLI calls the SDK, never `yertle_client` directly.** Both can reach the
   same endpoint; using the wire layer gives that endpoint two implementations
   that drift in error handling and unwrapping. Routing through `yertle.orgs`,
