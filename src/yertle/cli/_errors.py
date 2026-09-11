@@ -6,6 +6,7 @@ rather than in a near-identical try/except in every command — the duplication
 this package is most likely to grow as commands are added.
 """
 
+import json
 from collections.abc import Iterator
 from contextlib import contextmanager
 from http import HTTPStatus
@@ -42,10 +43,49 @@ def api_error_message(exc: UnexpectedStatus) -> str:
     elif status == HTTPStatus.FORBIDDEN:
         hint = "403 Forbidden — token is valid but lacks permission for this resource."
     elif status >= HTTPStatus.INTERNAL_SERVER_ERROR:
-        hint = f"{status} from the API. Try again, or check backend logs."
+        hint = f"{status} from the API."
     else:
         hint = f"{status} from the API."
-    return f"API error from {auth.resolve().api_url}\n  {hint}"
+
+    lines = [f"API error from {auth.resolve().api_url}", f"  {hint}"]
+    if detail := _detail_of(exc.content):
+        lines.append(f"  {detail}")
+    elif status >= HTTPStatus.INTERNAL_SERVER_ERROR:
+        lines.append("  No detail in the response body — check the backend logs.")
+    return "\n".join(lines)
+
+
+# Long bodies are an HTML error page or a stack trace, not a message meant for
+# a terminal. Show a prefix and let the logs carry the rest.
+_MAX_DETAIL_LEN = 400
+
+
+def _detail_of(content: bytes) -> str | None:
+    """Pull FastAPI's `detail` string out of an error body, if there is one.
+
+    The backend puts the actual cause here — a hierarchy 500 arrives as
+    `{"detail": "Failed to get hierarchy: column ... does not exist"}`. Dropping
+    it left every server error reading "500 from the API, check backend logs",
+    which is the least useful true thing the CLI could say, and turned an
+    answerable question into a guess.
+
+    Returns `None` for a body that is not JSON, not an object, or whose detail
+    is not a plain string (FastAPI uses a list of objects for 422 validation
+    errors, which is noise at a prompt).
+    """
+    try:
+        body = json.loads(content)
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(body, dict):
+        return None
+    detail = body.get("detail") or body.get("message")
+    if not isinstance(detail, str) or not detail.strip():
+        return None
+    detail = " ".join(detail.split())
+    if len(detail) > _MAX_DETAIL_LEN:
+        detail = f"{detail[:_MAX_DETAIL_LEN]}…"
+    return detail
 
 
 def die(message: str) -> NoReturn:
