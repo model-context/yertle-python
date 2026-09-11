@@ -97,6 +97,23 @@ def render(
     Console().print(table)
 
 
+def fields(rows: Sequence[tuple[str, str]], *, indent: str = "  ") -> None:
+    """Print aligned label/value pairs.
+
+    The shape every detail view needs — `nodes show`'s tag block and `orgs
+    show`'s whole body are both this. Width is measured from the labels rather
+    than fixed, so a long one cannot push its value out of the column.
+    """
+    if not rows:
+        return
+    width = max(len(label) for label, _ in rows)
+    console = Console()
+    for label, value in rows:
+        # soft_wrap: values are ids, URLs and ARNs, which Rich would otherwise
+        # hard-break mid-token to fit the console.
+        console.print(f"{indent}[bold]{label:<{width}}[/bold]  {value}", soft_wrap=True)
+
+
 def display_path(path: Path) -> str:
     """Render a path with `$HOME` collapsed to `~` for compact output."""
     try:
@@ -112,5 +129,6 @@ __all__ = [
     "WireModel",
     "display_path",
     "dump_json",
+    "fields",
     "render",
 ]

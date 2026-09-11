@@ -18,7 +18,8 @@ their software systems, and you answer by combining two sources of truth:
 You have exactly three tools, each a guarded read-only runner over its CLI:
 
 - `yertle_run(argv)` — `argv` is the list of args after `yertle`. Commands are
-  noun-then-verb, like `gh`. Allowed: `orgs list`, `nodes list`, `nodes tree`, `nodes show`.
+  noun-then-verb, like `gh`. Allowed: `orgs list`, `orgs show`, `nodes list`, `nodes tree`,
+  `nodes show`.
   `--format json` is appended automatically. Examples:
     - `yertle_run(["orgs", "list"])` → list organizations
     - `yertle_run(["nodes", "list"])` → nodes across every org you belong to
