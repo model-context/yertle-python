@@ -136,3 +136,132 @@ def test_orgs_use_keeps_credentials(isolated_config) -> None:
     assert stored["token"] == "yrt_secret"
     assert stored["api_url"] == "https://api.example.test"
     assert stored["org"] == ORG_ID
+
+
+# --- `yertle orgs show` ------------------------------------------------------
+#
+# Both payloads are captured from live responses. The asymmetry between them is
+# the point of the backfill: `/orgs/{id}` returns `invite_mode` but leaves
+# `role` and `member_count` null, while `/orgs` returns the opposite.
+
+_DETAIL = {
+    "id": ORG_ID,
+    "name": "Yertle",
+    "public_id": "yertle-befed489",
+    "created_at": "2026-04-15T00:52:23.240961+00:00",
+    "updated_at": "2026-05-02T18:46:09.342788+00:00",
+    "description": "The platform org.",
+    "invite_mode": "open",
+    "is_public": True,
+    "role": None,
+    "member_count": None,
+    "node_count": 13,
+    "root_node_id": "bbbff903-64a8-448e-a6c6-d3dfcfe4641f",
+}
+
+_SUMMARY = {**_DETAIL, "role": "owner", "member_count": 4, "invite_mode": None}
+
+_GET_ORG = "yertle.orgs.get_organization_orgs_org_id_get.sync"
+_LIST_ORGS = "yertle.orgs.list_organizations_orgs_get.sync"
+
+
+def _detail(**overrides: object) -> OrganizationResponse:
+    return OrganizationResponse.from_dict({**_DETAIL, **overrides})
+
+
+def _summary_list() -> OrganizationListResponse:
+    return OrganizationListResponse(
+        organizations=[OrganizationResponse.from_dict(_SUMMARY)],
+        total=1,
+    )
+
+
+@patch(_LIST_ORGS, return_value=_summary_list())
+@patch(_GET_ORG, return_value=_detail())
+@patch("yertle._client.get_client", return_value=object())
+def test_orgs_show_renders_the_detail_view(_get_client, _get, _list) -> None:
+    result = runner.invoke(app, ["orgs", "show", ORG_ID])
+    assert result.exit_code == 0, result.output
+    assert "Yertle" in result.output
+    assert "The platform org." in result.output
+    assert "yertle-befed489" in result.output
+    assert "open" in result.output
+    assert "public" in result.output
+    assert "13" in result.output
+
+
+@patch(_LIST_ORGS, return_value=_summary_list())
+@patch(_GET_ORG, return_value=_detail())
+@patch("yertle._client.get_client", return_value=object())
+def test_orgs_show_backfills_role_and_members(_get_client, _get, list_orgs) -> None:
+    """A detail view must never show less than the list view for the same org."""
+    result = runner.invoke(app, ["orgs", "show", ORG_ID])
+    assert result.exit_code == 0, result.output
+    assert "owner" in result.output
+    assert "4" in result.output
+    assert list_orgs.called, "should have consulted /orgs to fill the gaps"
+
+
+@patch(_LIST_ORGS)
+@patch(_GET_ORG, return_value=_detail(role="editor", member_count=9))
+@patch("yertle._client.get_client", return_value=object())
+def test_orgs_show_skips_the_backfill_when_unnecessary(_get_client, _get, list_orgs) -> None:
+    """If the detail endpoint ever populates role, stop paying for a second call."""
+    result = runner.invoke(app, ["orgs", "show", ORG_ID])
+    assert result.exit_code == 0, result.output
+    assert "editor" in result.output
+    assert not list_orgs.called
+
+
+@patch(_LIST_ORGS, return_value=OrganizationListResponse(organizations=[], total=0))
+@patch(_GET_ORG, return_value=_detail())
+@patch("yertle._client.get_client", return_value=object())
+def test_orgs_show_renders_unknown_fields_as_a_dash(_get_client, _get, _list) -> None:
+    """An absent member count is not zero, and must not look like one."""
+    result = runner.invoke(app, ["orgs", "show", ORG_ID])
+    assert result.exit_code == 0, result.output
+    assert "—" in result.output
+
+
+@patch(_LIST_ORGS, return_value=_summary_list())
+@patch(_GET_ORG, return_value=_detail(description=""))
+@patch("yertle._client.get_client", return_value=object())
+def test_orgs_show_omits_an_empty_description(_get_client, _get, _list) -> None:
+    result = runner.invoke(app, ["orgs", "show", ORG_ID])
+    assert result.exit_code == 0, result.output
+    lines = [line for line in result.output.splitlines() if line.strip()]
+    assert lines[0].strip() == "Yertle"
+    assert lines[1].strip() == ORG_ID
+
+
+@patch(_LIST_ORGS, return_value=_summary_list())
+@patch(_GET_ORG, return_value=_detail())
+@patch("yertle._client.get_client", return_value=object())
+def test_orgs_show_json_dumps_an_object(_get_client, _get, _list) -> None:
+    result = runner.invoke(app, ["orgs", "show", ORG_ID, "--format", "json"])
+    assert result.exit_code == 0, result.output
+    parsed = json.loads(result.output)
+    assert isinstance(parsed, dict)
+    assert parsed["name"] == "Yertle"
+
+
+def test_orgs_show_rejects_all() -> None:
+    result = runner.invoke(app, ["orgs", "show", "all"])
+    assert result.exit_code == 1
+    assert "needs one organization id" in result.output
+
+
+def test_orgs_show_rejects_a_malformed_id() -> None:
+    result = runner.invoke(app, ["orgs", "show", "acme-corp"])
+    assert result.exit_code == 1
+    assert "not an organization id" in result.output
+
+
+@patch(_LIST_ORGS, return_value=_summary_list())
+@patch(_GET_ORG, return_value=_detail(id="9f14e45f-ceea-467a-9575-28db8d0dc4db"))
+@patch("yertle._client.get_client", return_value=object())
+def test_orgs_show_survives_a_backfill_miss(_get_client, _get, _list) -> None:
+    """If the list response does not contain the org, show what we have."""
+    result = runner.invoke(app, ["orgs", "show", "9f14e45f-ceea-467a-9575-28db8d0dc4db"])
+    assert result.exit_code == 0, result.output
+    assert "—" in result.output

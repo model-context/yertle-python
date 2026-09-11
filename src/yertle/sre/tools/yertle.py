@@ -28,6 +28,7 @@ from yertle.sre.tools._shell import run_cli
 YERTLE_READ_COMMANDS: frozenset[tuple[str, str]] = frozenset(
     {
         ("orgs", "list"),
+        ("orgs", "show"),
         ("nodes", "list"),
         ("nodes", "tree"),
         ("nodes", "show"),
@@ -51,6 +52,7 @@ def yertle_run(argv: list[str]) -> str:
     Available shapes:
 
         yertle_run(["orgs", "list"])                    # list organizations
+        yertle_run(["orgs", "show", "<org-id>"])       # one org in full
         yertle_run(["nodes", "list"])                   # nodes across every org
         yertle_run(["nodes", "list", "--org", "<id>"])  # nodes in one org
         yertle_run(["nodes", "tree"])                   # containment hierarchy
