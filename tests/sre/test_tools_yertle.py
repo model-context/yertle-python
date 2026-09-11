@@ -65,7 +65,7 @@ def test_yertle_run_refuses_unlisted(fake_cli):
     unlisted = [
         ["orgs", "use", "abc"],  # a real command, but it writes
         ["auth", "status"],  # real and harmless, simply not granted
-        ["nodes", "show", "abc"],  # not implemented yet
+        ["nodes", "delete", "abc"],  # would mutate, and does not exist
         ["canvas", "render"],  # never existed
     ]
     for argv in unlisted:
