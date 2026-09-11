@@ -12,6 +12,7 @@ import pytest
 from yertle_client.models import (
     HierarchyEntryResponse,
     HierarchyResponse,
+    NodeCompleteStateResponse,
     NodeListResponse,
     NodeResponse,
 )
@@ -133,3 +134,40 @@ def test_tree_defaults_to_the_cross_org_endpoint(_get_client, sync) -> None:
 def test_tree_raises_on_an_unexpected_response(_get_client, _sync) -> None:
     with pytest.raises(RuntimeError, match="Unexpected response"):
         yertle.nodes.tree(ORG)
+
+
+_GET = "yertle.nodes._complete.sync"
+
+
+def _complete_response() -> NodeCompleteStateResponse:
+    return NodeCompleteStateResponse.from_dict(
+        {"node": {"id": "n1", "title": "Checkout", "description": ""}},
+    )
+
+
+@patch(_GET, return_value=_complete_response())
+@patch("yertle._client.get_client", return_value=object())
+def test_get_returns_complete_state(_get_client, sync) -> None:
+    state = yertle.nodes.get("n1", org_id=ORG)
+    assert state.node.to_dict()["title"] == "Checkout"
+    assert sync.call_args.kwargs["branch"] == "main"
+
+
+@patch(_GET, return_value=_complete_response())
+@patch("yertle._client.get_client", return_value=object())
+def test_get_forwards_a_branch(_get_client, sync) -> None:
+    yertle.nodes.get("n1", org_id=ORG, branch="feature-x")
+    assert sync.call_args.kwargs["branch"] == "feature-x"
+
+
+def test_get_refuses_all_orgs() -> None:
+    """The endpoint is scoped to one org, so 'all' cannot address a node."""
+    with pytest.raises(ValueError, match="specific org_id"):
+        yertle.nodes.get("n1", org_id="all")
+
+
+@patch(_GET, return_value=None)
+@patch("yertle._client.get_client", return_value=object())
+def test_get_raises_on_an_unexpected_response(_get_client, _sync) -> None:
+    with pytest.raises(RuntimeError, match="Unexpected response"):
+        yertle.nodes.get("n1", org_id=ORG)

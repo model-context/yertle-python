@@ -30,6 +30,7 @@ YERTLE_READ_COMMANDS: frozenset[tuple[str, str]] = frozenset(
         ("orgs", "list"),
         ("nodes", "list"),
         ("nodes", "tree"),
+        ("nodes", "show"),
     },
 )
 
@@ -53,11 +54,16 @@ def yertle_run(argv: list[str]) -> str:
         yertle_run(["nodes", "list"])                   # nodes across every org
         yertle_run(["nodes", "list", "--org", "<id>"])  # nodes in one org
         yertle_run(["nodes", "tree"])                   # containment hierarchy
+        yertle_run(["nodes", "show", "<node-id>"])      # one node in full
 
     `nodes tree` is the fastest way to see what contains what; `nodes list`
-    gives counts per node. That is currently the whole read surface. Search and
-    per-node detail commands are being added; until they appear here, they are
-    not callable.
+    gives counts per node; `nodes show` is the primary way to resolve a
+    component name into its underlying AWS / GitHub identifiers, since those
+    live in the node's tags. `nodes show` needs one organization — pass
+    `--org <id>` unless a default is set.
+
+    That is currently the whole read surface. Search is being added; until it
+    appears here, it is not callable.
 
     Every call needs a noun AND a verb. Anything outside the allowed set is
     refused — including write commands such as `orgs use`, which changes the

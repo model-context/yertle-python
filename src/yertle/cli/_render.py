@@ -10,7 +10,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Any, Generic, Protocol, TypeVar
+from typing import Annotated, Any, Generic, Protocol, TypeVar, runtime_checkable
 
 import typer
 from rich.console import Console
@@ -30,6 +30,7 @@ class Format(StrEnum):
 FormatOption = Annotated[Format, typer.Option("--format", "-f", help="Output format.")]
 
 
+@runtime_checkable
 class WireModel(Protocol):
     """The only shape `render` needs; every generated model satisfies it."""
 
@@ -55,15 +56,20 @@ class Column(Generic[T]):
     no_wrap: bool = False
 
 
-def dump_json(rows: Sequence[WireModel]) -> None:
-    """Print rows as JSON.
+def dump_json(data: WireModel | Sequence[WireModel]) -> None:
+    """Print one model, or a sequence of them, as JSON.
 
     Split out from `render` because not every command's display half is a
-    table — `nodes tree` draws a tree — but every command's machine-readable
-    half is the same. Shared here so `--format json` cannot drift between
-    commands.
+    table — `nodes tree` draws a tree, `nodes show` draws sections — but every
+    command's machine-readable half is the same. Shared here so `--format
+    json` cannot drift between commands.
+
+    A single model dumps as an object rather than a one-element array, so
+    `yertle nodes show <id> --format json | jq .node.title` reads the way a
+    caller expects.
     """
-    typer.echo(json.dumps([row.to_dict() for row in rows], indent=2, default=str))
+    payload = data.to_dict() if isinstance(data, WireModel) else [row.to_dict() for row in data]
+    typer.echo(json.dumps(payload, indent=2, default=str))
 
 
 def render(

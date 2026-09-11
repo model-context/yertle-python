@@ -1,16 +1,22 @@
 """`yertle nodes` — work with nodes."""
 
+import builtins
 from collections import defaultdict
-from typing import Any
+from typing import Annotated, Any
 
 import typer
 from rich.console import Console
 from rich.tree import Tree
-from yertle_client.models import HierarchyEntryResponse, NodeResponse
+from yertle_client.models import (
+    HierarchyEntryResponse,
+    NodeCompleteStateResponse,
+    NodeResponse,
+)
+from yertle_client.types import Unset
 
 import yertle
 from yertle.cli._context import OrgOption, resolve_org
-from yertle.cli._errors import api_errors
+from yertle.cli._errors import api_errors, die
 from yertle.cli._render import Column, Format, FormatOption, dump_json, render
 
 app = typer.Typer(
@@ -175,3 +181,157 @@ def tree_nodes(org: OrgOption = None, fmt: FormatOption = Format.TABLE) -> None:
     across_orgs = org_id == yertle.nodes.ALL_ORGS
     scope = "all organizations" if across_orgs else f"org {org_id}"
     Console().print(_build_tree(entries, f"Hierarchy in {scope} ({len(entries)})"))
+
+
+def _tag_value(raw: object) -> str:
+    """Render one tag value.
+
+    The wire shape is `{"Team": {"value": "Backend"}}` — a nested object, not
+    a flat string map, which the architecture doc's example does not show.
+    Unwrap it, but fall back to the raw value so an unexpected shape prints
+    something rather than raising inside a display command.
+    """
+    if isinstance(raw, dict):
+        inner = raw.get("value")
+        return str(inner) if inner is not None else ""
+    return str(raw)
+
+
+def _items(value: object) -> builtins.list[Any]:
+    """Coerce an optional wire list into a list. `Unset` and `None` mean empty."""
+    return value if isinstance(value, builtins.list) else []
+
+
+def _section(console: Console, title: str, count: int | None = None) -> None:
+    console.print(f"\n[bold]{title if count is None else f'{title} ({count})'}[/bold]")
+
+
+def _labelled(label: object) -> str:
+    """Trailing dim label for a connection, or nothing. Labels are often null."""
+    return f"  [dim]{label}[/dim]" if label else ""
+
+
+def _titles_by_id(state: NodeCompleteStateResponse) -> dict[str, str]:
+    """Map child id → title, for resolving the ids inside `connections`.
+
+    Internal connections reference `from_child_id` / `to_child_id`, so without
+    this the section renders as a wall of uuids.
+    """
+    titles: dict[str, str] = {}
+    for child in _items(state.child_nodes):
+        entry = child.to_dict()
+        node_id, title = entry.get("id"), entry.get("title")
+        if isinstance(node_id, str) and isinstance(title, str):
+            titles[node_id] = title
+    return titles
+
+
+def _render_header(console: Console, state: NodeCompleteStateResponse, branch: str) -> None:
+    node = state.node.to_dict()
+    console.print(f"[bold]{node.get('title', '(untitled)')}[/bold]")
+    console.print(f"[dim]{node.get('id', '')} · branch {branch}[/dim]")
+    if description := (node.get("description") or "").strip():
+        console.print(f"\n{description}")
+
+
+def _render_tags(console: Console, state: NodeCompleteStateResponse) -> None:
+    tags = state.tags.to_dict() if not isinstance(state.tags, Unset) else {}
+    if not tags:
+        return
+    _section(console, "Tags")
+    for key in sorted(tags):
+        console.print(f"  {key}  [cyan]{_tag_value(tags[key])}[/cyan]")
+
+
+def _render_directories(console: Console, state: NodeCompleteStateResponse) -> None:
+    directories = _items(state.directories)
+    if not directories:
+        return
+    _section(console, "Directories")
+    for path in directories:
+        console.print(f"  {path}")
+
+
+def _render_related(console: Console, state: NodeCompleteStateResponse) -> None:
+    for label, related in (("Parents", state.parent_nodes), ("Children", state.child_nodes)):
+        items = _items(related)
+        if not items:
+            continue
+        _section(console, label, len(items))
+        for item in items:
+            entry = item.to_dict()
+            console.print(f"  {entry.get('title', '')}  [dim]{entry.get('id', '')}[/dim]")
+
+
+def _render_connections(console: Console, state: NodeCompleteStateResponse) -> None:
+    connections = _items(state.connections)
+    if not connections:
+        return
+    titles = _titles_by_id(state)
+    _section(console, "Connections between children", len(connections))
+    for connection in connections:
+        edge = connection.to_dict()
+        source = titles.get(str(edge.get("from_child_id")), "?")
+        target = titles.get(str(edge.get("to_child_id")), "?")
+        console.print(f"  {source} → {target}{_labelled(edge.get('label'))}")
+
+
+def _render_boundary(console: Console, state: NodeCompleteStateResponse) -> None:
+    """Connections crossing this node's own boundary."""
+    for heading, related in (
+        ("Ingress", state.ingress_connections),
+        ("Egress", state.egress_connections),
+    ):
+        items = _items(related)
+        if not items:
+            continue
+        _section(console, heading, len(items))
+        for item in items:
+            edge = item.to_dict()
+            # These arrive denormalised with the far end's title attached, so
+            # unlike internal connections they need no id lookup.
+            other = (edge.get("connected_node") or {}).get("title", "?")
+            line = f"{other} → this" if heading == "Ingress" else f"this → {other}"
+            console.print(f"  {line}{_labelled(edge.get('label'))}")
+
+
+def _render_show(state: NodeCompleteStateResponse, branch: str) -> None:
+    """Print a node's detail view.
+
+    Empty sections are omitted rather than printed as headings with nothing
+    under them — a node with no connections should read as a short page, not a
+    form full of blanks.
+    """
+    console = Console()
+    _render_header(console, state, branch)
+    _render_tags(console, state)
+    _render_directories(console, state)
+    _render_related(console, state)
+    _render_connections(console, state)
+    _render_boundary(console, state)
+
+
+@app.command("show")
+def show_node(
+    node_id: Annotated[str, typer.Argument(help="Node id from `yertle nodes list`.")],
+    org: OrgOption = None,
+    branch: Annotated[str, typer.Option("--branch", "-b", help="Branch to read.")] = (
+        yertle.nodes.DEFAULT_BRANCH
+    ),
+    fmt: FormatOption = Format.TABLE,
+) -> None:
+    """Show a node's details — tags, parents, children and connections."""
+    org_id = resolve_org(org)
+    if org_id == yertle.nodes.ALL_ORGS:
+        die(
+            "`nodes show` needs one organization.\n"
+            "  Pass --org <id>, or set a default with `yertle orgs use <id>`.",
+        )
+
+    with api_errors():
+        state = yertle.nodes.get(node_id, org_id=org_id, branch=branch)
+
+    if fmt is Format.JSON:
+        dump_json(state)
+        return
+    _render_show(state, branch)

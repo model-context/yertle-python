@@ -18,23 +18,30 @@ from yertle_client.api.directories import (
     get_org_hierarchy_orgs_org_id_hierarchy_get,
 )
 from yertle_client.api.nodes import (
+    get_complete_state_by_branch_orgs_org_id_nodes_node_id_tree_branch_complete_get as _complete,
+)
+from yertle_client.api.nodes import (
     list_all_nodes_across_orgs_orgs_all_nodes_get,
     list_nodes_orgs_org_id_nodes_get,
 )
 from yertle_client.models import (
     HierarchyEntryResponse,
     HierarchyResponse,
+    NodeCompleteStateResponse,
     NodeListResponse,
     NodeResponse,
 )
 
 from yertle._client import client
 
-__all__ = ["ALL_ORGS", "list", "tree"]
+__all__ = ["ALL_ORGS", "DEFAULT_BRANCH", "get", "list", "tree"]
 
 #: Sentinel for "every organization the caller belongs to" — the backend spells
 #: it this way too, as the literal path segment in `/orgs/all/nodes`.
 ALL_ORGS = "all"
+
+#: Branch reads default here, matching the backend's own default branch name.
+DEFAULT_BRANCH = "main"
 
 # The endpoint's own default page size. Named because the loop below reasons
 # about it, not because it is configurable.
@@ -116,3 +123,35 @@ def tree(org_id: str = ALL_ORGS) -> builtins.list[HierarchyEntryResponse]:
     if not isinstance(response, HierarchyResponse):
         raise RuntimeError(f"Unexpected response from nodes.tree(): {response!r}")
     return response.entries
+
+
+def get(
+    node_id: str,
+    *,
+    org_id: str,
+    branch: str = DEFAULT_BRANCH,
+) -> NodeCompleteStateResponse:
+    """Fetch a node's complete state on `branch`.
+
+    One request returns the node, its tags and directories, its parents and
+    children, the connections between those children, and the connections
+    crossing its own boundary. The Go CLI used `/canvas?include_related=full`
+    instead, but only because it needed visual positions for its ASCII
+    diagram; `/complete` is the smaller answer for a detail view.
+
+    `org_id` is required and cannot be `ALL_ORGS` — the endpoint is scoped to
+    one organization. Deciding *which* org a bare node id belongs to is a
+    front-end concern, so the CLI resolves it and passes it explicitly rather
+    than this module carrying an ambient default.
+    """
+    if org_id == ALL_ORGS:
+        raise ValueError("nodes.get() needs a specific org_id, not 'all'.")
+    response = _complete.sync(
+        client=client(),
+        org_id=UUID(org_id),
+        node_id=node_id,
+        branch=branch,
+    )
+    if not isinstance(response, NodeCompleteStateResponse):
+        raise RuntimeError(f"Unexpected response from nodes.get({node_id!r}): {response!r}")
+    return response
