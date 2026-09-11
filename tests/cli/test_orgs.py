@@ -14,7 +14,9 @@ from typer.testing import CliRunner
 from yertle_client.errors import UnexpectedStatus
 from yertle_client.models import OrganizationListResponse, OrganizationResponse
 
+from yertle.cli._context import ORG_ENV_VAR
 from yertle.cli.main import app
+from yertle.shared import auth as auth_mod
 
 runner = CliRunner()
 
@@ -87,3 +89,50 @@ def test_orgs_list_renders_an_api_error_as_a_sentence(_get_client, _sync) -> Non
     assert result.exit_code == 1
     assert "401 Unauthorized" in result.output
     assert "Traceback" not in result.output
+
+
+# --- `yertle orgs use` -------------------------------------------------------
+
+
+@pytest.fixture
+def isolated_config(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    """A config file the test owns, and no ambient $YERTLE_ORG."""
+    path = tmp_path / "config.json"
+    monkeypatch.setattr(auth_mod, "CONFIG_PATH", path)
+    monkeypatch.delenv(ORG_ENV_VAR, raising=False)
+    return path
+
+
+ORG_ID = "8f14e45f-ceea-467a-9575-28db8d0dc4db"
+
+
+def test_orgs_use_persists_the_org(isolated_config) -> None:
+    result = runner.invoke(app, ["orgs", "use", ORG_ID])
+    assert result.exit_code == 0, result.output
+    assert ORG_ID in result.output
+    assert json.loads(isolated_config.read_text())["org"] == ORG_ID
+
+
+def test_orgs_use_all_resets(isolated_config) -> None:
+    runner.invoke(app, ["orgs", "use", ORG_ID])
+    result = runner.invoke(app, ["orgs", "use", "all"])
+    assert result.exit_code == 0, result.output
+    assert "every org" in result.output
+    assert json.loads(isolated_config.read_text())["org"] == "all"
+
+
+def test_orgs_use_rejects_a_malformed_id(isolated_config) -> None:
+    result = runner.invoke(app, ["orgs", "use", "acme-corp"])
+    assert result.exit_code == 1
+    assert "not an organization id" in result.output
+    assert not isolated_config.exists(), "a rejected id must not be written"
+
+
+def test_orgs_use_keeps_credentials(isolated_config) -> None:
+    """The whole risk of writing to this file is clobbering the token."""
+    auth_mod.save_credentials(api_url="https://api.example.test", token="yrt_secret")
+    runner.invoke(app, ["orgs", "use", ORG_ID])
+    stored = json.loads(isolated_config.read_text())
+    assert stored["token"] == "yrt_secret"
+    assert stored["api_url"] == "https://api.example.test"
+    assert stored["org"] == ORG_ID

@@ -3,6 +3,7 @@
 import typer
 from rich.console import Console
 
+from yertle.cli._context import ORG_ENV_VAR, resolve_org_setting
 from yertle.cli._render import display_path
 from yertle.shared import auth
 
@@ -35,6 +36,8 @@ def _source_label(source: auth.Source, env_var: str) -> str:
     Lives in the CLI rather than `shared.auth` because it is presentation:
     the resolver reports *which* source won, this decides how to name it.
     """
+    if source is auth.Source.FLAG:
+        return "from --org"
     if source is auth.Source.ENV:
         return f"from ${env_var}"
     if source is auth.Source.CONFIG:
@@ -64,9 +67,14 @@ def status() -> None:
     # padding width below but not the rendered width, which would misalign
     # the column.
     token_display = _mask_token(resolved.token) if resolved.token is not None else "—"
+    # Org is not a credential, but it is the third answer to "what am I
+    # pointed at right now?" — and the question people actually ask about it
+    # is "why *that* org", which is the provenance column.
+    org = resolve_org_setting()
     rows = [
         ("API URL", resolved.api_url, _source_label(resolved.api_url_source, auth.API_URL_ENV_VAR)),
         ("Token", token_display, _source_label(resolved.token_source, auth.TOKEN_ENV_VAR)),
+        ("Org", org.value, _source_label(org.source, ORG_ENV_VAR)),
     ]
     # Size the value column to its contents rather than a fixed width: a long
     # API URL would otherwise shove the source column out of alignment.
