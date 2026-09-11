@@ -11,6 +11,8 @@ import json
 import os
 from dataclasses import dataclass
 
+import yertle
+from yertle.shared import auth
 from yertle.sre.tools._shell import run_cli
 
 PROBE_TIMEOUT = 5
@@ -37,11 +39,28 @@ def probe_anthropic() -> ProbeResult:
 
 
 def probe_yertle() -> ProbeResult:
-    """Check the yertle CLI by listing orgs."""
-    result = run_cli(["yertle", "orgs", "--format", "json"], timeout=PROBE_TIMEOUT)
-    if not result.ok:
-        return ProbeResult("yertle", False, "not authenticated — run `yertle login`")
-    return ProbeResult("yertle", True, "authenticated")
+    """Check Yertle credentials by listing organizations.
+
+    Calls the SDK in-process rather than shelling out to the `yertle` CLI.
+    The CLI form was `yertle orgs --format json`, which silently became a
+    usage error the moment `orgs` grew subcommands — and because the test
+    mocked the subprocess, nothing caught it; the probe just started telling
+    authenticated users to log in.
+
+    Going through the SDK deletes the string that can drift and answers the
+    question the probe actually asks — are these credentials good — without a
+    process spawn. `aws` and `gh` still shell out because they genuinely are
+    external CLIs.
+    """
+    try:
+        api_url = auth.resolve().api_url
+        yertle.orgs.list()
+    except auth.AuthError as e:
+        # AuthError's message is written to be shown to a user as-is.
+        return ProbeResult("yertle", False, str(e))
+    except Exception as e:  # noqa: BLE001 — probes never raise; they report.
+        return ProbeResult("yertle", False, f"could not reach the API ({type(e).__name__})")
+    return ProbeResult("yertle", True, f"authenticated to {api_url}")
 
 
 def probe_aws() -> ProbeResult:
