@@ -76,3 +76,38 @@ def test_api_errors_lets_real_bugs_through() -> None:
     """Deliberately narrow: a genuine bug stays a traceback, not a tidy message."""
     with pytest.raises(ZeroDivisionError), api_errors():
         _ = 1 / 0
+
+
+def test_api_error_message_surfaces_the_backend_detail() -> None:
+    """The cause of a 500 is in the body; showing it is the whole point."""
+    body = b'{"detail":"Failed to get hierarchy: column x does not exist"}'
+    message = api_error_message(UnexpectedStatus(500, body))
+    assert "column x does not exist" in message
+
+
+def test_api_error_message_says_so_when_a_500_carries_no_detail() -> None:
+    message = api_error_message(UnexpectedStatus(500, b""))
+    assert "No detail in the response body" in message
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        b"<html>502 Bad Gateway</html>",  # not JSON
+        b'["detail"]',  # JSON, but not an object
+        b'{"detail":[{"loc":["body"],"msg":"field required"}]}',  # 422 shape
+        b'{"detail":"   "}',  # blank
+    ],
+)
+def test_api_error_message_ignores_bodies_with_no_usable_detail(body: bytes) -> None:
+    """A malformed body must not crash the error path — it is the error path."""
+    message = api_error_message(UnexpectedStatus(500, body))
+    assert "500 from the API" in message
+
+
+def test_api_error_message_truncates_a_huge_detail() -> None:
+    """A stack trace in the body should not flood the terminal."""
+    body = b'{"detail":"' + b"x" * 5000 + b'"}'
+    message = api_error_message(UnexpectedStatus(500, body))
+    assert len(message) < 700
+    assert message.endswith("…")
