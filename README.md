@@ -66,11 +66,27 @@ yertle auth status     # shows which API URL and token are in effect
 
 ### Using it as a library
 
-For the SDK alone, install into your project rather than as a tool:
+`uv tool install` gives you the **command**, not the library. It puts the
+package in an isolated environment and links only the entry points onto your
+PATH, so `import yertle` in a script will not find it:
+
+```console
+$ uv tool install yertle && yertle version
+0.3.0
+$ python -c "import yertle"
+ModuleNotFoundError: No module named 'yertle'
+```
+
+That is how `uv tool` is meant to work, not a packaging mistake. To use the
+SDK, install into the project that imports it:
 
 ```bash
-pip install yertle          # or: uv add yertle
+uv add yertle               # or: pip install yertle
 ```
+
+That direction gives you both — `import yertle` in your code, and the CLI via
+`uv run yertle`. Installing as a tool as well is only worth it if you want
+`yertle` available outside the project.
 
 ```python
 import yertle
