@@ -140,3 +140,63 @@ def test_login_rejects_an_empty_token(
 
     assert result.exit_code == 1
     assert not isolated_config.exists()
+
+
+# --- `yertle login` defaults -------------------------------------------------
+
+
+def test_login_defaults_to_production(
+    isolated_config: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bare `yertle login` should work. Requiring --api-url taxed the common case."""
+    monkeypatch.setattr("yertle.cli.commands.login.typer.prompt", lambda *a, **k: "yrt_abc")
+
+    result = runner.invoke(app, ["login"])
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(isolated_config.read_text())["api_url"] == auth_mod.DEFAULT_API_URL
+
+
+def test_login_still_accepts_an_explicit_backend(
+    isolated_config: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The flag is for persisting a non-prod choice; $YERTLE_API_URL is for one-offs."""
+    monkeypatch.setattr("yertle.cli.commands.login.typer.prompt", lambda *a, **k: "yrt_abc")
+
+    result = runner.invoke(app, ["login", "--api-url", "https://api.dev.yertle.com"])
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(isolated_config.read_text())["api_url"] == "https://api.dev.yertle.com"
+
+
+def test_login_names_the_backend_it_saved(
+    isolated_config: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With a default in play, "saved" alone does not say which backend."""
+    monkeypatch.setattr("yertle.cli.commands.login.typer.prompt", lambda *a, **k: "yrt_abc")
+
+    result = runner.invoke(app, ["login", "--api-url", "https://api.dev.yertle.com"])
+
+    assert "https://api.dev.yertle.com" in result.output
+
+
+def test_login_binds_the_token_to_its_backend(
+    isolated_config: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Both keys are written together.
+
+    A token is only valid against the backend that issued it. Saving the token
+    without the URL would let a dev token resolve against production later and
+    fail as an opaque 401 — the exact confusion `auth status` exists to
+    diagnose.
+    """
+    monkeypatch.setattr("yertle.cli.commands.login.typer.prompt", lambda *a, **k: "yrt_dev")
+
+    runner.invoke(app, ["login", "--api-url", "https://api.dev.yertle.com"])
+
+    stored = json.loads(isolated_config.read_text())
+    assert stored == {"api_url": "https://api.dev.yertle.com", "token": "yrt_dev"}

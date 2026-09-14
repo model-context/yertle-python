@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 
 import typer
 
+from yertle.cli._render import display_path
 from yertle.shared import auth
 
 
@@ -32,9 +33,9 @@ def _web_url_for(api_url: str) -> str | None:
 
 def login(
     api_url: str = typer.Option(
-        ...,
+        auth.DEFAULT_API_URL,
         "--api-url",
-        help="Yertle API base URL (e.g. https://api.yertle.com).",
+        help="Yertle API base URL. Defaults to production.",
     ),
     web_url: str | None = typer.Option(
         None,
@@ -42,7 +43,17 @@ def login(
         help="Web app base URL, if it can't be derived from --api-url.",
     ),
 ) -> None:
-    """Save API credentials to ~/.yertle/config.json."""
+    """Save API credentials to ~/.yertle/config.json.
+
+    `--api-url` defaults to production, which is what almost everyone wants;
+    requiring it taxed the common case to serve the rare one. Pointing at
+    another backend for a single command is still `$YERTLE_API_URL`'s job —
+    the flag is for when you want that choice persisted.
+
+    The token and the URL are saved together on purpose. A token is only valid
+    against the backend that issued it, so binding them here is what stops a
+    dev token being aimed at production later and failing as an opaque 401.
+    """
     settings_url = web_url or _web_url_for(api_url)
     if settings_url:
         typer.echo(
@@ -61,4 +72,6 @@ def login(
         typer.secho("No token entered — nothing saved.", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1)
     auth.save_credentials(api_url=api_url, token=token)
-    typer.echo(f"✓ Saved credentials to {auth.CONFIG_PATH}")
+    # Name the backend: with a default in play, "saved" is not enough to tell
+    # you *which* backend you just bound this token to.
+    typer.echo(f"✓ Saved credentials for {api_url} to {display_path(auth.CONFIG_PATH)}")
