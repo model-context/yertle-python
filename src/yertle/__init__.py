@@ -4,8 +4,8 @@
     >>> for org in yertle.orgs.list():
     ...     print(org.name)
 
-Resources live in per-feature modules (`yertle.orgs`, `yertle.nodes`, future
-`yertle.branches`, …) and are re-exported here. Default-client plumbing
+Resources live in per-feature modules (`yertle.orgs`, `yertle.nodes`,
+`yertle.search`, future `yertle.branches`, …) and are re-exported here. Default-client plumbing
 lives in `yertle._client`; users interact with it via the top-level
 `yertle.client()` and `yertle.configure(...)` re-exports.
 
@@ -19,7 +19,7 @@ from importlib.metadata import version as _dist_version
 
 from yertle_client.client import AuthenticatedClient
 
-from yertle import nodes, orgs
+from yertle import nodes, orgs, search
 from yertle._client import client, configure, get_client
 
 try:
@@ -37,4 +37,5 @@ __all__ = [
     "get_client",
     "nodes",
     "orgs",
+    "search",
 ]

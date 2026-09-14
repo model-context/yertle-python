@@ -9,7 +9,7 @@ import pytest
 import typer
 from yertle_client.errors import UnexpectedStatus
 
-from yertle.cli._errors import api_error_message, api_errors
+from yertle.cli._errors import api_error_message, api_errors, die
 from yertle.shared import auth
 
 
@@ -111,3 +111,16 @@ def test_api_error_message_truncates_a_huge_detail() -> None:
     message = api_error_message(UnexpectedStatus(500, body))
     assert len(message) < 700
     assert message.endswith("…")
+
+
+def test_api_errors_lets_a_clean_exit_through() -> None:
+    """`typer.Exit` subclasses RuntimeError, so it must be re-raised first.
+
+    A command that validates its own arguments inside an `api_errors()` block
+    calls `die()`, which raises `typer.Exit`. Before this was handled, the
+    RuntimeError branch caught it and printed a second, wrong error after the
+    real one.
+    """
+    with pytest.raises(typer.Exit) as excinfo, api_errors():
+        die("bad --tag")
+    assert excinfo.value.exit_code == 1

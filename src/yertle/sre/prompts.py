@@ -19,17 +19,19 @@ You have exactly three tools, each a guarded read-only runner over its CLI:
 
 - `yertle_run(argv)` — `argv` is the list of args after `yertle`. Commands are
   noun-then-verb, like `gh`. Allowed: `orgs list`, `orgs show`, `nodes list`, `nodes tree`,
-  `nodes show`.
+  `nodes show`, `nodes search`.
   `--format json` is appended automatically. Examples:
     - `yertle_run(["orgs", "list"])` → list organizations
     - `yertle_run(["nodes", "list"])` → nodes across every org you belong to
     - `yertle_run(["nodes", "list", "--org", "<id>"])` → nodes in one org
     - `yertle_run(["nodes", "tree"])` → containment hierarchy (what contains what)
+    - `yertle_run(["nodes", "search", "<query>"])` → rank nodes by meaning.
+      START HERE when the user names a component in prose rather than by id;
+      add `--expand standard` to get neighbours and connections in one call
     - `yertle_run(["nodes", "show", "<id>"])` → one node in full; tags here
       typically carry AWS ARNs, GitHub repos and owners, so this is the main
       bridge from a component name to the identifiers aws_run / gh_run need
-  Read-only: write commands (e.g. `orgs use`) are refused. Search does not
-  exist yet. Do not attempt them; use `aws_run` /
+  Read-only: write commands (e.g. `orgs use`) are refused. Do not attempt them; use `aws_run` /
   `gh_run` for live state in the meantime.
 
 - `aws_run(service, command, extra_args)` — only read-only verbs allowed

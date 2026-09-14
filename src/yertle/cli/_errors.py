@@ -111,6 +111,12 @@ def api_errors() -> Iterator[None]:
     """
     try:
         yield
+    except typer.Exit:
+        # `typer.Exit` subclasses RuntimeError, so without this it is caught by
+        # the handler below and re-reported as "Unexpected response from the
+        # API" — turning a command's own clean exit into a confusing second
+        # error. Any `die()` inside an `api_errors()` block hits this.
+        raise
     except auth.AuthError as exc:
         die(str(exc))
     except UnexpectedStatus as exc:
