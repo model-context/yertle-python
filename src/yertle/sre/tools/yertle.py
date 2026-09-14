@@ -32,6 +32,7 @@ YERTLE_READ_COMMANDS: frozenset[tuple[str, str]] = frozenset(
         ("nodes", "list"),
         ("nodes", "tree"),
         ("nodes", "show"),
+        ("nodes", "search"),
     },
 )
 
@@ -57,6 +58,8 @@ def yertle_run(argv: list[str]) -> str:
         yertle_run(["nodes", "list", "--org", "<id>"])  # nodes in one org
         yertle_run(["nodes", "tree"])                   # containment hierarchy
         yertle_run(["nodes", "show", "<node-id>"])      # one node in full
+        yertle_run(["nodes", "search", "<query>"])      # rank nodes by meaning
+        yertle_run(["nodes", "search", "<query>", "--expand", "standard"])
 
     `nodes tree` is the fastest way to see what contains what; `nodes list`
     gives counts per node; `nodes show` is the primary way to resolve a
@@ -64,8 +67,12 @@ def yertle_run(argv: list[str]) -> str:
     live in the node's tags. `nodes show` needs one organization — pass
     `--org <id>` unless a default is set.
 
-    That is currently the whole read surface. Search is being added; until it
-    appears here, it is not callable.
+    Start with `nodes search` when you have a description rather than a name —
+    it is the fastest way from "the checkout service" to a node id. Add
+    `--expand standard` to get the surrounding nodes and connections in the
+    same call, which is usually cheaper than a follow-up `nodes show`.
+
+    That is currently the whole read surface.
 
     Every call needs a noun AND a verb. Anything outside the allowed set is
     refused — including write commands such as `orgs use`, which changes the

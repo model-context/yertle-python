@@ -335,3 +335,135 @@ def show_node(
         dump_json(state)
         return
     _render_show(state, branch)
+
+
+def _tag_filters(pairs: builtins.list[str]) -> dict[str, str]:
+    """Parse repeated `--tag key=value` options."""
+    filters: dict[str, str] = {}
+    for pair in pairs:
+        key, separator, value = pair.partition("=")
+        if not separator or not key.strip():
+            die(f"--tag must be key=value, got {pair!r}.")
+        filters[key.strip()] = value.strip()
+    return filters
+
+
+# A one-segment path is the node itself, so there is no parent to show.
+_PATH_WITH_PARENT = 2
+
+
+def _path_of(node: Any) -> str:
+    """Ancestor breadcrumb, excluding the node itself.
+
+    The API returns the full chain ending in the node's own title, which the
+    Title column already shows. Dropping that last segment removes the
+    duplication and buys back the width it was costing — the path was wrapping
+    over four lines on an 80-column terminal.
+    """
+    path = node.get("path")
+    if not isinstance(path, builtins.list) or len(path) < _PATH_WITH_PARENT:
+        return ""
+    return " / ".join(path[:-1])
+
+
+MATCH_COLUMNS: builtins.list[Column[Any]] = [
+    Column("Score", lambda m: f"{m['score']:.3f}"),
+    Column("Title", lambda m: m["title"]),
+    Column("Why", lambda m: m.get("match_reason") or "", style="dim"),
+    Column("ID", lambda m: m["node_id"], style="cyan", no_wrap=True),
+]
+
+# The API only populates `path` on expanded results, so without --expand this
+# column is blank on every row. Shown only when some row can fill it.
+PATH_COLUMN: Column[Any] = Column("Path", lambda m: m["_path"], style="dim")
+
+CONNECTION_COLUMNS: builtins.list[Column[Any]] = [
+    Column("From", lambda c: c.get("from_title") or "?"),
+    # A null label is common; the type is the useful fallback.
+    Column("Edge", lambda c: c.get("label") or c.get("connection_type") or "", style="dim"),
+    Column("To", lambda c: c.get("to_title") or "?"),
+]
+
+
+@app.command("search")
+def search_nodes(
+    query: Annotated[str, typer.Argument(help="Natural-language query.")],
+    org: OrgOption = None,
+    top_k: Annotated[int, typer.Option("--top-k", "-k", help="Max matches to return.")] = 5,
+    expand: Annotated[
+        yertle.search.Expansion | None,
+        typer.Option("--expand", help="Also return surrounding nodes and connections."),
+    ] = None,
+    tag: Annotated[
+        builtins.list[str] | None,
+        typer.Option("--tag", help="Pre-filter by tag (key=value, repeatable)."),
+    ] = None,
+    scope_root: Annotated[
+        str | None,
+        typer.Option("--scope-root", help="Restrict to this node's subtree."),
+    ] = None,
+    dir_prefix: Annotated[
+        str | None,
+        typer.Option("--dir-prefix", help="Restrict to nodes under this directory."),
+    ] = None,
+    include_text: Annotated[
+        bool,
+        typer.Option("--include-text", help="Also print each match's prose content."),
+    ] = False,
+    fmt: FormatOption = Format.TABLE,
+) -> None:
+    """Find the nodes most likely to match a natural-language query."""
+    org_id = resolve_org(org)
+    if org_id == yertle.nodes.ALL_ORGS:
+        die(
+            "`nodes search` needs one organization.\n"
+            "  Pass --org <id>, or set a default with `yertle orgs use <id>`.",
+        )
+
+    with api_errors():
+        result = yertle.search.retrieve(
+            query,
+            org_id=org_id,
+            top_k=top_k,
+            expansion=expand,
+            root_node_id=scope_root,
+            tag_filters=_tag_filters(tag or []) or None,
+            directory_prefix=dir_prefix,
+            include_text=include_text,
+        )
+
+    if fmt is Format.JSON:
+        dump_json(result)
+        return
+
+    matches = [m.to_dict() for m in result.matches]
+    if not matches:
+        typer.echo(f"No matches for {query!r}.")
+        return
+
+    # Path lives on the node, not the match, so fold it in before rendering
+    # rather than making every column accessor do the lookup.
+    nodes_by_id = {n.to_dict()["node_id"]: n.to_dict() for n in result.nodes}
+    for match in matches:
+        match["_path"] = _path_of(nodes_by_id.get(match["node_id"], {}))
+
+    columns = builtins.list(MATCH_COLUMNS)
+    if any(match["_path"] for match in matches):
+        columns.insert(-1, PATH_COLUMN)
+
+    console = Console()
+    render(matches, fmt=fmt, columns=columns, title=f"Matches for {query!r}")
+
+    connections = [c.to_dict() for c in result.connections]
+    if connections:
+        console.print()
+        render(connections, fmt=fmt, columns=CONNECTION_COLUMNS, title="Connections")
+
+    if include_text:
+        for match in matches:
+            node = nodes_by_id.get(match["node_id"], {})
+            if text := (node.get("text_content") or "").strip():
+                console.print(
+                    f"\n[bold]{node.get('title', '')}[/bold]  [dim]{match['node_id']}[/dim]"
+                )
+                console.print(text)
