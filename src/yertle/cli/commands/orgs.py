@@ -53,7 +53,12 @@ def use_org(
         typer.Argument(help=f"Organization id from `yertle orgs list`, or '{ALL_ORGS}'."),
     ],
 ) -> None:
-    """Set the default organization for org-scoped commands.
+    """Set the default organization, or 'all' to clear it.
+
+    The first line is what `yertle orgs` shows in its command list, and it is
+    the only place most people will look. Naming 'all' there is the difference
+    between the escape hatch being discoverable and it existing only for
+    readers of `--help`.
 
     Persists to ~/.yertle/config.json, so it survives between shells — the
     same role `gcloud config set project` or `kubectl config use-context`
