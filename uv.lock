@@ -2791,10 +2791,9 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.15.13" },
     { name = "typer", specifier = ">=0.12" },
     { name = "vulture", marker = "extra == 'dev'", specifier = ">=2.11" },
-    { name = "yertle", extras = ["cli"], marker = "extra == 'sre'" },
     { name = "yertle-client", specifier = ">=0.2.0,<0.3.0" },
 ]
-provides-extras = ["cli", "sre", "mcp", "dev"]
+provides-extras = ["sre", "mcp", "dev"]
 
 [[package]]
 name = "yertle-client"

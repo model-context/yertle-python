@@ -40,8 +40,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Kept so `yertle[cli]` keeps resolving; its contents are now in base.
-cli = []
 sre = [
     "langchain>=1.0",
     "langchain-anthropic>=0.3.0",
@@ -50,7 +48,6 @@ sre = [
     "pydantic>=2.7",
     "pydantic-settings>=2.4",
     "python-dotenv>=1.0",
-    "yertle[cli]",
 ]
 mcp = [
     "fastmcp>=2.0",

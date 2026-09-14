@@ -105,7 +105,7 @@ URL from `$YERTLE_API_URL`, then the config file, then `https://api.yertle.com`.
 Requires [`uv`](https://docs.astral.sh/uv/) and Python 3.11+.
 
 ```bash
-make install        # uv sync --extra cli --extra dev
+make install        # uv sync --extra sre --extra mcp --extra dev
 make check          # lint + format-check + typecheck + test
 ```
 
