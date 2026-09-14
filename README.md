@@ -5,19 +5,23 @@ working with Yertle architecture graphs from Python.
 
 ## Install
 
-The CLI and SRE agent are distributed on PyPI and installed with
+The CLI is distributed on PyPI and installed with
 [`uv`](https://docs.astral.sh/uv/):
 
 ```bash
-uv tool install "yertle[sre]"
+uv tool install yertle
 ```
 
-That puts these commands on your PATH:
+That puts `yertle` on your PATH: `about`, `version`, `login`, `orgs list`,
+`orgs show`, `orgs use`, `nodes list`, `nodes tree`, `nodes show`,
+`nodes search`, `auth status`.
 
-| Command | What it does |
+Two optional extras ship alongside it, neither needed for the CLI:
+
+| Extra | What it adds |
 |---|---|
-| `yertle` | CLI — `about`, `version`, `login`, `orgs list`, `orgs show`, `orgs use`, `nodes list`, `nodes tree`, `nodes show`, `nodes search`, `auth status` |
-| `yertle-sre` | Natural-language SRE agent |
+| `yertle[sre]` | `yertle-sre`, a natural-language SRE agent (~37MB more) |
+| `yertle[mcp]` | the MCP server — launched by MCP hosts, not installed by you |
 
 The MCP server is deliberately **not** part of a tool install. MCP hosts launch
 it themselves, so it never needs to sit on your PATH — point your host at
@@ -36,23 +40,22 @@ it themselves, so it never needs to sit on your PATH — point your host at
 ```
 
 Every command lands on your PATH regardless of which extras you pick — Python
-entry points are not conditional on extras. So `yertle[sre]` still creates a
-`yertle-mcp` you will not use, and `yertle[cli]` creates both it and
-`yertle-sre`. Running one tells you which extra it needs rather than failing
-obscurely:
+entry points are not conditional on extras. So a plain `uv tool install yertle`
+still creates `yertle-sre` and `yertle-mcp`. Running one tells you which extra
+it needs rather than failing obscurely:
 
 ```
-$ yertle-mcp
-yertle-mcp requires the [mcp] extra. Install with: pip install 'yertle[mcp]'
+$ yertle-sre
+yertle-sre requires the [sre] extra. Install with: pip install 'yertle[sre]'
 ```
 
 So install the extras you want to *use*, not the ones you want to see.
-`pipx install "yertle[sre]"` works too.
+`pipx install yertle` works too.
 
 To upgrade later, `uv tool upgrade yertle`. That only works if you installed
-without pinning a version — `uv tool install "yertle[sre]==0.3.0"` records
+without pinning a version — `uv tool install "yertle==0.3.0"` records
 the pin as the requirement, and upgrades then have nothing to move to.
-Reinstall with `uv tool install --force "yertle[sre]"` to unpin.
+Reinstall with `uv tool install --force yertle` to unpin.
 
 Verify:
 

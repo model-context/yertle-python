@@ -90,11 +90,13 @@ if an invariant genuinely needs to change, change it deliberately and say why.
 
 ## Dependencies
 
-Do not add a runtime dependency without asking. The base install is deliberately
-thin — `yertle` alone pulls in only `yertle-client`, and everything heavier
-(typer, rich, langchain, fastmcp) sits behind an extra. A new import in
-`src/yertle/` that isn't in the base dependency list breaks the plain
-`pip install yertle` case.
+Do not add a runtime dependency without asking. The base install is
+`yertle-client` plus the CLI's own needs (typer, rich), because
+`uv tool install yertle` must give a working `yertle` command — the package is
+named after it. Everything in a heavier class (langchain, fastmcp) sits behind
+an extra: `[sre]` alone triples the install. A new import in `src/yertle/`
+that isn't in the base dependency list breaks the plain `pip install yertle`
+case, and anything imported at module scope in `cli/` breaks the CLI itself.
 
 `pyproject.toml` and `.github/workflows/` are review-gated. Propose changes;
 don't land them as a side effect of another task.
