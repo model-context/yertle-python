@@ -1,6 +1,6 @@
 [project]
 name = "yertle"
-version = "0.2.0"
+version = "0.3.0"
 description = "Python ecosystem for Yertle — CLI, SDK, and tooling for the Yertle architecture-graph platform."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -20,7 +20,13 @@ classifiers = [
 ]
 
 dependencies = [
-    "yertle-client>=0.2.0",
+    # Upper-bounded deliberately. yertle-client is 0.x, so a MINOR bump is
+    # allowed to break, and an unbounded range means a newly published client
+    # floats into user installs with no release here — CI can be green on
+    # 0.2.0 while `uv tool install yertle` resolves something else. uv.lock
+    # pins dev and CI; it does not constrain the published wheel.
+    # See todo_important.txt #15.
+    "yertle-client>=0.2.0,<0.3.0",
 ]
 
 [project.optional-dependencies]
