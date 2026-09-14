@@ -200,3 +200,22 @@ def test_login_binds_the_token_to_its_backend(
 
     stored = json.loads(isolated_config.read_text())
     assert stored == {"api_url": "https://api.dev.yertle.com", "token": "yrt_dev"}
+
+
+def test_login_stays_vague_when_the_web_url_is_not_derivable(
+    isolated_config: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Better vague than confidently wrong.
+
+    PATs are minted in the web app, not the API, so a self-hosted backend whose
+    host follows no known convention gets a generic prompt rather than a
+    guessed URL that 404s on a user's first interaction.
+    """
+    monkeypatch.setattr("yertle.cli.commands.login.typer.prompt", lambda *a, **k: "yrt_abc")
+
+    result = runner.invoke(app, ["login", "--api-url", "https://yertle.internal.example"])
+
+    assert result.exit_code == 0, result.output
+    assert "Settings page of your" in result.output
+    assert "/settings" not in result.output
