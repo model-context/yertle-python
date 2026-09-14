@@ -11,7 +11,7 @@ not `yertle orgs`. A bare noun prints help.
 
 import typer
 
-from yertle.cli.commands import auth, login, nodes, orgs, version
+from yertle.cli.commands import about, auth, login, nodes, orgs, version
 
 app = typer.Typer(
     name="yertle",
@@ -25,6 +25,7 @@ def root() -> None:
     """CLI for Yertle — the architecture-graph platform."""
 
 
+app.command(name="about")(about.about)
 app.command(name="version")(version.version)
 app.command(name="login")(login.login)
 app.add_typer(orgs.app)
