@@ -265,3 +265,19 @@ def test_orgs_show_survives_a_backfill_miss(_get_client, _get, _list) -> None:
     result = runner.invoke(app, ["orgs", "show", "9f14e45f-ceea-467a-9575-28db8d0dc4db"])
     assert result.exit_code == 0, result.output
     assert "—" in result.output
+
+
+def test_orgs_group_listing_mentions_how_to_clear() -> None:
+    """`yertle orgs` must name 'all' as the way out of a scoped default.
+
+    The group's command list is where someone scoped to one org actually looks
+    when they want every org back, and Typer builds it from the first line of
+    each docstring — so a well-meaning rewrite of that line silently removes
+    the only signpost. `--help` and `about` both document it, but neither is
+    on the path of a user who does not yet know the option exists.
+    """
+    result = runner.invoke(app, ["orgs"])
+    assert "all" in result.output, (
+        "`yertle orgs` no longer mentions 'all'; check the first line of "
+        "use_org's docstring, which Typer renders as the short help."
+    )
