@@ -9,21 +9,37 @@ The CLI and SRE agent are distributed on PyPI and installed with
 [`uv`](https://docs.astral.sh/uv/):
 
 ```bash
-uv tool install "yertle[sre,mcp]"
+uv tool install "yertle[sre]"
 ```
 
-That puts three commands on your PATH:
+That puts these commands on your PATH:
 
 | Command | What it does |
 |---|---|
 | `yertle` | CLI — `about`, `version`, `login`, `orgs list`, `orgs show`, `orgs use`, `nodes list`, `nodes tree`, `nodes show`, `nodes search`, `auth status` |
 | `yertle-sre` | Natural-language SRE agent |
-| `yertle-mcp` | MCP server for AI agents |
 
-All three commands land on your PATH regardless of which extras you pick —
-Python entry points are not conditional on extras. Installing a subset, say
-`uv tool install "yertle[cli]"`, still creates `yertle-sre` and `yertle-mcp`;
-running one tells you which extra it needs rather than failing obscurely:
+The MCP server is deliberately **not** part of a tool install. MCP hosts launch
+it themselves, so it never needs to sit on your PATH — point your host at
+`uvx`, which resolves and runs it on demand:
+
+```json
+{
+  "mcpServers": {
+    "yertle": {
+      "command": "uvx",
+      "args": ["--from", "yertle[mcp]", "yertle-mcp"],
+      "env": { "YERTLE_TOKEN": "yrt_..." }
+    }
+  }
+}
+```
+
+Every command lands on your PATH regardless of which extras you pick — Python
+entry points are not conditional on extras. So `yertle[sre]` still creates a
+`yertle-mcp` you will not use, and `yertle[cli]` creates both it and
+`yertle-sre`. Running one tells you which extra it needs rather than failing
+obscurely:
 
 ```
 $ yertle-mcp
@@ -31,12 +47,12 @@ yertle-mcp requires the [mcp] extra. Install with: pip install 'yertle[mcp]'
 ```
 
 So install the extras you want to *use*, not the ones you want to see.
-`pipx install "yertle[sre,mcp]"` works too.
+`pipx install "yertle[sre]"` works too.
 
 To upgrade later, `uv tool upgrade yertle`. That only works if you installed
-without pinning a version — `uv tool install "yertle[sre,mcp]==0.3.0"` records
+without pinning a version — `uv tool install "yertle[sre]==0.3.0"` records
 the pin as the requirement, and upgrades then have nothing to move to.
-Reinstall with `uv tool install --force "yertle[sre,mcp]"` to unpin.
+Reinstall with `uv tool install --force "yertle[sre]"` to unpin.
 
 Verify:
 
