@@ -7,7 +7,7 @@ install: ## Install project + all runtime extras + dev deps into a uv-managed ve
 	# All extras: pyright typechecks src/yertle/{sre,mcp}/ which import
 	# langchain / fastmcp. Without --extra sre --extra mcp, pyright can't
 	# resolve those imports and CI fails with `reportMissingImports`.
-	uv sync --extra cli --extra sre --extra mcp --extra dev
+	uv sync --extra sre --extra mcp --extra dev
 
 lint: ## Run ruff lint
 	uv run ruff check .
