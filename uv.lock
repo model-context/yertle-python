@@ -2737,7 +2737,7 @@ wheels = [
 
 [[package]]
 name = "yertle"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "yertle-client" },
@@ -2796,7 +2796,7 @@ requires-dist = [
     { name = "typer", marker = "extra == 'cli'", specifier = ">=0.12" },
     { name = "vulture", marker = "extra == 'dev'", specifier = ">=2.11" },
     { name = "yertle", extras = ["cli"], marker = "extra == 'sre'" },
-    { name = "yertle-client", specifier = ">=0.2.0" },
+    { name = "yertle-client", specifier = ">=0.2.0,<0.3.0" },
 ]
 provides-extras = ["cli", "sre", "mcp", "dev"]
 
