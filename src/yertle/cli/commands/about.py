@@ -33,9 +33,10 @@ services connect, and where things live.
 
 [bold]Getting started[/bold]
 
-  yertle login --api-url https://api.yertle.com
+  yertle login
       Paste a personal access token, minted in the web app under Settings.
-      Or set $YERTLE_TOKEN and $YERTLE_API_URL instead — no login needed.
+      Defaults to production; pass --api-url for another backend, or set
+      $YERTLE_TOKEN and $YERTLE_API_URL instead and skip login entirely.
 
   yertle auth status
       Which backend and token are in effect, and where each came from.
