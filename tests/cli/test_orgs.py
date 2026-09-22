@@ -7,18 +7,37 @@ itself would pass even if the CLI stopped calling the SDK at all.
 
 import datetime
 import json
+import re
 from unittest.mock import patch
 
 import pytest
 from typer.testing import CliRunner
 from yertle_client.errors import UnexpectedStatus
-from yertle_client.models import OrganizationListResponse, OrganizationResponse
+from yertle_client.models import (
+    OrganizationListResponse,
+    OrganizationResponse,
+    OrganizationResponseRoleType0,
+)
 
 from yertle.cli._context import ORG_ENV_VAR
 from yertle.cli.main import app
 from yertle.shared import auth as auth_mod
 
 runner = CliRunner()
+
+# Rich highlights option-shaped text and wraps to width; see tests/cli/test_help.py.
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+_BOX = re.compile(r"[\u2500-\u257f]")
+
+
+def _cells(output: str) -> str:
+    """Table output as flat text, so a row can be matched as its cell values.
+
+    Strips the colour codes and the box-drawing borders, then collapses
+    whitespace — leaving `"Beta Corp 3 12 public owner"` for a row, which is
+    readable in the assertion and independent of column widths.
+    """
+    return " ".join(_BOX.sub(" ", _ANSI.sub("", output)).split())
 
 
 def _fake_response() -> OrganizationListResponse:
@@ -32,12 +51,22 @@ def _fake_response() -> OrganizationListResponse:
                 created_at=now,
                 updated_at=now,
             ),
+            # Populated the way `/orgs` really answers — captured from a live
+            # response, not written from memory. The endpoint fills
+            # member_count, node_count, is_public and role; only invite_mode
+            # comes back null, which is what `_merged` exists to patch up for
+            # `show`. `org-1` above leaves them unset on purpose, so both the
+            # populated and the absent (`—`) paths are covered.
             OrganizationResponse(
                 id="org-2",
                 name="Beta Corp",
                 public_id="beta",
                 created_at=now,
                 updated_at=now,
+                is_public=True,
+                role=OrganizationResponseRoleType0.OWNER,
+                member_count=3,
+                node_count=12,
             ),
         ],
         total=2,
@@ -52,6 +81,20 @@ def test_orgs_list_table_format(_get_client, _sync) -> None:
     assert "Acme" in result.output
     assert "Beta Corp" in result.output
     assert "Organizations (2)" in result.output
+
+
+@patch("yertle.orgs.list_organizations_orgs_get.sync", return_value=_fake_response())
+@patch("yertle._client.get_client", return_value=object())
+def test_orgs_list_shows_counts_visibility_and_role(_get_client, _sync) -> None:
+    """The columns the web app shows, from the same single request."""
+    result = runner.invoke(app, ["orgs", "list"], terminal_width=200)
+    assert result.exit_code == 0, result.output
+    plain = _cells(result.output)
+    for header in ("Members", "Nodes", "Visibility", "Role"):
+        assert header in plain, f"missing {header} column"
+    # org-2 is fully populated; org-1 is not.
+    assert "Beta Corp 3 12 public owner" in plain
+    assert "Acme — — private —" in plain
 
 
 @patch("yertle.orgs.list_organizations_orgs_get.sync", return_value=_fake_response())

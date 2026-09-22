@@ -28,9 +28,32 @@ app = typer.Typer(
     epilog=FORMAT_EPILOG,
 )
 
+
+def _visibility(org: OrganizationResponse) -> str:
+    """Render `is_public` the way the web app labels it.
+
+    Shared by `list` and `show` so the two cannot disagree about what a
+    boolean named `is_public` is called at a prompt.
+    """
+    return "public" if org.is_public else "private"
+
+
+# Mirrors the columns the web app's organization list shows, in the same
+# order. `/orgs` populates `member_count`, `node_count`, `is_public` and
+# `role` already, so none of these costs an extra request — only
+# `invite_mode` is null on this endpoint, which is why `show` still merges
+# (see `_merged`).
+#
+# This overflows an 80-column terminal: the id alone is 36 characters. Left
+# that way deliberately for now — see docs/todo/todo.txt item 2, which tracks
+# the short-identifier work that would make it fit.
 COLUMNS: list[Column[OrganizationResponse]] = [
     Column("ID", lambda org: str(org.id), style="cyan", no_wrap=True),
     Column("Name", lambda org: org.name),
+    Column("Members", lambda org: _optional(org.member_count), justify="right"),
+    Column("Nodes", lambda org: _optional(org.node_count), justify="right"),
+    Column("Visibility", _visibility),
+    Column("Role", lambda org: _optional(org.role)),
 ]
 
 
@@ -144,7 +167,7 @@ def show_org(
             ("Members", _optional(org.member_count)),
             ("Nodes", _optional(org.node_count)),
             ("Invite mode", _optional(org.invite_mode)),
-            ("Visibility", "public" if org.is_public else "private"),
+            ("Visibility", _visibility(org)),
             ("Root node", _optional(org.root_node_id)),
         ],
     )
