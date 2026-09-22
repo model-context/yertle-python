@@ -17,6 +17,7 @@ app = typer.Typer(
     name="yertle",
     help="CLI for Yertle — the architecture-graph platform.",
     no_args_is_help=True,
+    epilog="Run `yertle about` for an overview, or `yertle <command> --help` for options.",
 )
 
 

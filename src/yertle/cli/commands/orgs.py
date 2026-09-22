@@ -10,6 +10,7 @@ import yertle
 from yertle.cli._context import ALL_ORGS, validate_org
 from yertle.cli._errors import api_errors, die
 from yertle.cli._render import (
+    FORMAT_EPILOG,
     Column,
     Format,
     FormatOption,
@@ -24,6 +25,7 @@ app = typer.Typer(
     name="orgs",
     help="Work with organizations.",
     no_args_is_help=True,
+    epilog=FORMAT_EPILOG,
 )
 
 COLUMNS: list[Column[OrganizationResponse]] = [
