@@ -6,6 +6,7 @@ CLI → `yertle.nodes` → `yertle_client` path.
 
 import datetime
 import json
+import re
 from unittest.mock import patch
 
 import pytest
@@ -40,7 +41,9 @@ def _response() -> NodeListResponse:
                 created_by="someone",
                 created_at=now,
                 num_children=3,
+                num_descendants=7,
                 num_parents=1,
+                num_ancestors=2,
             ),
             NodeResponse(
                 id="node-2",
@@ -115,3 +118,16 @@ def test_missing_counts_render_as_a_dash(_get_client, _sync) -> None:
     """An uncomputed count is not zero, and must not look like one."""
     result = runner.invoke(app, ["nodes", "list", "--org", ORG])
     assert "—" in result.output
+
+
+@patch(_ORG_SCOPED, return_value=_response())
+@patch("yertle._client.get_client", return_value=object())
+def test_list_shows_transitive_counts(_get_client, _sync) -> None:
+    """Descendants and ancestors, from the same request the direct counts use."""
+    result = runner.invoke(app, ["nodes", "list", "--org", ORG], terminal_width=200)
+    assert result.exit_code == 0, result.output
+    plain = " ".join(re.sub(r"[\u2500-\u257f]", " ", result.output).split())
+    assert "Children Descendants Parents Ancestors" in plain
+    # Direct and transitive counts must not be transposed: 3 children but 7
+    # descendants, 1 parent but 2 ancestors.
+    assert "Checkout API 3 7 1 2" in plain
