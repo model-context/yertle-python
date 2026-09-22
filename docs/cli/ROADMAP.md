@@ -118,16 +118,55 @@ anything. The node shows up in `nodes list` but hangs off nothing in `nodes
 tree`. An agent's first attempt will produce an invisible node, and the fix
 requires understanding branches, head commits and full-state pushes.
 
-A `--parent <id>` flag on `create` that does create-then-attach is the single
-highest-value ergonomic decision available, but it needs Phase 2's machinery.
-It is listed here so Phase 1's `create` is designed to grow the flag rather
-than be rewritten for it.
+Fix it in `create`'s **output**, not its signature: print the new id and the
+exact next command to attach it. That costs nothing and distorts nothing.
+
+### Rejected: a `--parent` flag on `create`
+
+An earlier draft proposed `nodes create <title> --parent <id>`, doing
+create-then-attach in one command. **Rejected**, because it is wrong for the
+workflow we actually care about — an agent creating several children and
+attaching them together.
+
+Creating five children with `--parent P` produces:
+
+- **Five commits on P's branch** instead of one, for what is conceptually a
+  single change.
+- **Five full read-modify-write cycles** over P's entire state, rather than
+  one.
+- **A 409 storm if the agent parallelizes.** Each push carries
+  `expected_head_commit`, and each successful push invalidates the value the
+  others are holding. Four of five fail. Agents parallelize independent-looking
+  work by default, and five `create` calls look independent.
+- **A layout that cannot be good.** Spacing children sensibly requires knowing
+  how many there are. Placed one at a time, each call can only guess, and
+  "properly spaced" is unreachable by construction.
+
+The flag optimizes the single-node case at the cost of the batch case, and the
+batch case is the normal one. Two commands (`create`, then `attach`) is one
+mental model for both, instead of a shortcut whose failure mode is a
+conflict storm.
 
 ### Phase 2 — one honest push layer
 
 One SDK primitive, in `yertle.nodes`, that owns the whole sequence: read head,
 read complete state, apply a caller-supplied change, push, retry once on 409.
 Everything state-shaped is built on it — edit, attach, connect, lay out.
+
+**Attach is variadic from day one.** Not a single-child verb that callers loop
+over:
+
+    yertle nodes attach <child> [<child>...] --to <parent>
+
+One push, one commit, every child and its placement decided together. This is
+the direct expression of the workflow — create the nodes, then attach them all
+at once — and it is the reason the `--parent` flag above was rejected rather
+than deferred. The single-child case is just the batch case with one argument,
+so there is no second code path and no incremental-layout heuristic to invent.
+
+Connections belong in the same call once they exist, for the same reason: they
+are part of the one change being described, and splitting them out means a
+second commit and a second chance to conflict.
 
 The failure mode to design against is specific and severe: **a push that sends
 only the fields it means to change silently deletes the parent's tags and
