@@ -37,11 +37,22 @@ def _count(value: Any) -> str:
     return str(value) if isinstance(value, int) else "—"
 
 
+# Ordered to pair each direct count with its transitive total, the way the
+# web app's node list does: Children/Descendants walk down, Parents/Ancestors
+# walk up. All four come from the response this command already makes.
+#
+# Caveat on the two totals: the generated model defaults them to 0 rather
+# than UNSET, so a backend that omits them renders as "0 descendants" instead
+# of "—". The direct counts default to UNSET and so degrade honestly. Nothing
+# to do here — it is the OpenAPI schema's default — but it means a 0 in these
+# two columns is slightly weaker evidence than a 0 in the other two.
 BASE_COLUMNS: list[Column[NodeResponse]] = [
     Column("ID", lambda node: node.id, style="cyan", no_wrap=True),
     Column("Title", lambda node: node.title),
-    Column("Children", lambda node: _count(node.num_children)),
-    Column("Parents", lambda node: _count(node.num_parents)),
+    Column("Children", lambda node: _count(node.num_children), justify="right"),
+    Column("Descendants", lambda node: _count(node.num_descendants), justify="right"),
+    Column("Parents", lambda node: _count(node.num_parents), justify="right"),
+    Column("Ancestors", lambda node: _count(node.num_ancestors), justify="right"),
 ]
 
 # Only worth a column when the listing spans orgs; when scoped it is the same
