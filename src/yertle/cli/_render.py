@@ -29,6 +29,12 @@ class Format(StrEnum):
 # silently falling through to the table branch.
 FormatOption = Annotated[Format, typer.Option("--format", "-f", help="Output format.")]
 
+# Group help pages list verbs but not their options, so `yertle orgs` — the
+# page you land on before you know the verb — showed no sign that JSON
+# output existed. Lives beside `FormatOption` so the advertisement and the
+# flag cannot drift apart.
+FORMAT_EPILOG = "Every data command takes --format json. Run `yertle about` for an overview."
+
 
 @runtime_checkable
 class WireModel(Protocol):
@@ -123,6 +129,7 @@ def display_path(path: Path) -> str:
 
 
 __all__ = [
+    "FORMAT_EPILOG",
     "Column",
     "Format",
     "FormatOption",

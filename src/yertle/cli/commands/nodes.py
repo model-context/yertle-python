@@ -17,12 +17,13 @@ from yertle_client.types import Unset
 import yertle
 from yertle.cli._context import OrgOption, resolve_org
 from yertle.cli._errors import api_errors, die
-from yertle.cli._render import Column, Format, FormatOption, dump_json, render
+from yertle.cli._render import FORMAT_EPILOG, Column, Format, FormatOption, dump_json, render
 
 app = typer.Typer(
     name="nodes",
     help="Work with nodes.",
     no_args_is_help=True,
+    epilog=FORMAT_EPILOG,
 )
 
 

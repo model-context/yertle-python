@@ -1,0 +1,111 @@
+YERTLE-PYTHON — TODO
+====================
+
+Open items that are known, deliberate, and not yet fixed. Numbered entries are
+permanent: refer to them by number.
+
+
+1. `--format json` is not 1:1 with the backend response
+-------------------------------------------------------
+
+STATUS: open. Recorded 2026-09-22 while adding the `--format json` epilog to
+the noun-group help pages.
+
+THE GOAL
+
+`--format json` should emit exactly what the API returned — same envelope, same
+keys, same nesting, one command to one response. Today it emits the *SDK's*
+view: whatever `.to_dict()` produces after `yertle.orgs` / `yertle.nodes` /
+`yertle.search` have unwrapped and, in one case, recombined it.
+
+Why it matters more than it used to: the end goal is for agents to drive this
+CLI the way they drive an MCP server. An agent that learns the shape of
+`yertle orgs show --format json` and then reads the OpenAPI spec finds two
+different answers, and has no way to know which one is real. Divergence is
+cheap for a human reading a table and expensive for a model building a mental
+model of the API.
+
+It also undercuts the habit `CLAUDE.md` names as the one that catches this
+codebase's most expensive bugs: capturing real payloads into fixtures. A
+fixture captured from `--format json` today is a fixture of the SDK, not of the
+backend, and it will pass while the real wire shape drifts underneath it.
+
+WHERE IT DIVERGES
+
+  yertle orgs show        WORST — not a response at all.
+                          `cli/commands/orgs.py::_merged` issues a SECOND
+                          request to `/orgs` and copies `role` and
+                          `member_count` onto the `/orgs/{id}` model. The JSON
+                          is a composite that no single endpoint ever returned.
+                          The comment there explains why (the two endpoints
+                          populate disjoint field sets, and `show` displaying
+                          less than `list` reads as a bug) — the real fix is
+                          backend-side: make `/orgs/{id}` populate all three.
+
+  yertle nodes list       Envelope dropped AND pages concatenated.
+                          `nodes.py::list` loops `/orgs/{id}/nodes` at 50 per
+                          page and returns a flat array. The wire shape is
+                          `NodeListResponse{nodes, total, limit, offset}`; the
+                          output is the bare `nodes` array of every page
+                          stitched together. So the JSON corresponds to N
+                          responses, not one, and `total`/`limit`/`offset` are
+                          gone.
+
+  yertle orgs list        Envelope dropped.
+                          `orgs.py::list` returns `response.organizations`,
+                          discarding `OrganizationListResponse.total`.
+                          Deliberate for SDK callers (`total` is redundant with
+                          `len()`), but the CLI inherits the unwrap.
+
+  yertle nodes tree       Envelope dropped.
+                          `nodes.py::tree` returns `response.entries`,
+                          discarding `HierarchyResponse.total`. Single request,
+                          so this one is only the envelope.
+
+ALREADY 1:1 — DO NOT "FIX"
+
+  yertle nodes show       `dump_json(state)` on the whole
+                          `NodeCompleteStateResponse` from one request.
+
+  yertle nodes search     `dump_json(result)` on the whole `RetrieveResponse`.
+                          The `_path` field the table view folds in is injected
+                          AFTER the JSON branch returns
+                          (`cli/commands/nodes.py`), so it never reaches JSON.
+                          Keep that ordering.
+
+NOT A PROBLEM (verified 2026-09-22, do not re-investigate)
+
+  Unknown fields survive. The generated models carry `additional_properties`,
+  so a key the backend adds before the client is regenerated round-trips
+  through `from_dict`/`to_dict` intact. Confirmed against
+  `OrganizationResponse`. An earlier read of this assumed otherwise; it is
+  wrong. The divergences above are structural only.
+
+OPTIONS, NOT YET CHOSEN
+
+  a) Keep the SDK unwrapping and have the CLI re-wrap for JSON output. Cheap,
+     but it is a second place that knows the envelope shape, which is exactly
+     the drift `CLAUDE.md` warns about.
+  b) Have the SDK return the envelope and unwrap at the call site. Honest, but
+     it taxes every library caller to serve the CLI, and `orgs.py`'s docstring
+     argues the opposite on purpose.
+  c) Add a separate passthrough path used only by `--format json`. Clean
+     separation, but two code paths to one endpoint — the thing invariant 4
+     exists to prevent.
+  d) Leave the SDK alone and fix only `orgs show`, which is the one case that
+     is actively misleading rather than merely reshaped. The envelope drops are
+     lossy but not false.
+
+  (d) is the smallest honest step and does not foreclose the others. Whichever
+  is chosen, the backend fix to `/orgs/{id}` should land regardless — it is the
+  root cause of the worst case here.
+
+RELATED
+
+  A `--debug`/`YERTLE_DEBUG` flag printing the raw HTTP exchange to stderr was
+  discussed alongside this and is NOT built. It would answer "what did the
+  backend actually send?" directly, via an httpx response event hook installed
+  once in `shared/auth.py::get_client` (the generated client accepts
+  `httpx_args`). That is a developer diagnostic and a separate concern from
+  this item — it does not make `--format json` correct, it just makes the
+  divergence visible.
