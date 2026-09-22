@@ -10,7 +10,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Any, Generic, Protocol, TypeVar, runtime_checkable
+from typing import Annotated, Any, Generic, Literal, Protocol, TypeVar, runtime_checkable
 
 import typer
 from rich.console import Console
@@ -60,6 +60,8 @@ class Column(Generic[T]):
     value: Callable[[T], str]
     style: str | None = None
     no_wrap: bool = False
+    # Counts read better right-aligned; Rich defaults every column to left.
+    justify: Literal["left", "right", "center"] = "left"
 
 
 def dump_json(data: WireModel | Sequence[WireModel]) -> None:
@@ -97,7 +99,12 @@ def render(
 
     table = Table(title=title)
     for column in columns:
-        table.add_column(column.header, style=column.style, no_wrap=column.no_wrap)
+        table.add_column(
+            column.header,
+            style=column.style,
+            no_wrap=column.no_wrap,
+            justify=column.justify,
+        )
     for row in rows:
         table.add_row(*(column.value(row) for column in columns))
     Console().print(table)

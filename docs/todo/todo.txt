@@ -109,3 +109,67 @@ RELATED
   `httpx_args`). That is a developer diagnostic and a separate concern from
   this item — it does not make `--format json` correct, it just makes the
   divergence visible.
+
+
+2. Identifiers are raw UUIDs everywhere, and nothing shorter resolves
+----------------------------------------------------------------------
+
+STATUS: open. Recorded 2026-09-22 while adding Members / Nodes / Visibility /
+Role to `orgs list`.
+
+THE PROBLEM
+
+Every id the CLI prints or accepts is a 36-character UUID. On an 80-column
+terminal the id column alone is 45% of the width, which is why `orgs list` now
+overflows and why `nodes list` hides its Org column when it can (see the
+comment above `ORG_COLUMN` in `cli/commands/nodes.py`). It is also 36
+characters to copy by hand every time you want `yertle orgs use <id>`.
+
+The data already has a human-sized identifier. `/orgs` returns a `public_id`
+alongside the UUID:
+
+    "id":        "2c440b7a-d5bd-4f0d-9264-8da3195497af"
+    "public_id": "pfc-9eebe379"
+
+It is URL-friendly, stable, unique, and roughly a third of the width. The web
+app already uses it in URLs.
+
+WHAT IS BLOCKING IT (verified 2026-09-22 against prod)
+
+  `yertle.orgs.get("pfc-9eebe379")`  ->  404 {"detail":"Organization not found"}
+  `yertle.orgs.get("2c440b7a-...")`  ->  200 OK
+
+So `/orgs/{id}` resolves UUIDs only. Printing `public_id` in the table today
+would show an identifier that no other command accepts — strictly worse than
+the UUID, however much better it looks.
+
+THE WORK, IN ORDER
+
+  a) BACKEND: have the path-parameter endpoints resolve either form —
+     `/orgs/{id}` accepting `pfc-9eebe379` as well as the UUID. This is the
+     load-bearing change; everything else is presentation. The same question
+     applies to node ids, which have no public_id at all today and would need
+     one (or a short-prefix scheme) to get the same treatment.
+
+  b) CLI: relax `cli/_context.py::validate_org`, which currently hard-requires
+     `UUID(value)` and is the single chokepoint every org-scoped command goes
+     through. Accepting a `public_id` there is a small change once (a) lands.
+
+  c) CLI: switch the `ID` column in `orgs list` to the short form, and revisit
+     `ORG_COLUMN` in `nodes list`, which was suppressed for width alone.
+
+INTERIM OPTION, IF (a) STALLS
+
+  A git-style short prefix can be done entirely client-side: resolve an 8-char
+  prefix against `yertle.orgs.list()` inside `validate_org`, and send the full
+  UUID on the wire. It needs no backend change and would fit every column
+  comfortably (a 6-column `orgs list` lands in ~64 columns with an 8-char id).
+  The cost is one extra request to resolve, and prefix collisions to handle.
+  Worth doing only if (a) is not happening soon — two identifier schemes is
+  worse than one good one.
+
+RELATED
+
+  Item 1 above. `--format json` is unaffected by any of this: it dumps the
+  full model, so the complete UUID stays available to scripts and agents no
+  matter what the table shows.
