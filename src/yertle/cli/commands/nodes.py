@@ -350,7 +350,11 @@ def show_node(
 
 
 def _tag_filters(pairs: builtins.list[str]) -> dict[str, str]:
-    """Parse repeated `--tag key=value` options."""
+    """Parse repeated `--tag key=value` options.
+
+    Shared by `search` (which filters on them) and `create` (which sets them),
+    so the two cannot drift on what `--tag` accepts.
+    """
     filters: dict[str, str] = {}
     for pair in pairs:
         key, separator, value = pair.partition("=")
@@ -479,3 +483,70 @@ def search_nodes(
                     f"\n[bold]{node.get('title', '')}[/bold]  [dim]{match['node_id']}[/dim]"
                 )
                 console.print(text)
+
+
+@app.command("create")
+def create_node(
+    title: Annotated[str, typer.Argument(help="Node title.")],
+    org: OrgOption = None,
+    description: Annotated[
+        str | None,
+        typer.Option("--description", "-d", help="Node description."),
+    ] = None,
+    tag: Annotated[
+        builtins.list[str] | None,
+        typer.Option("--tag", help="Tag to set (key=value, repeatable)."),
+    ] = None,
+    directory: Annotated[
+        builtins.list[str] | None,
+        typer.Option("--dir", help="Directory path to file it under (repeatable)."),
+    ] = None,
+    public_id: Annotated[
+        str | None,
+        typer.Option("--public-id", help="Custom public identifier. Generated if omitted."),
+    ] = None,
+    message: Annotated[
+        str | None,
+        typer.Option("--message", "-m", help="Commit message. Defaults to 'Initial commit'."),
+    ] = None,
+    fmt: FormatOption = Format.TABLE,
+) -> None:
+    """Create a node.
+
+    The node is created unattached — it belongs to the organization but sits
+    under no parent, so it appears in `nodes list` and not in `nodes tree`.
+    Attaching it is a separate operation against the parent's branch, which
+    the CLI cannot do yet (see docs/cli/ROADMAP.md).
+    """
+    org_id = resolve_org(org)
+    if org_id == yertle.nodes.ALL_ORGS:
+        die(
+            "`nodes create` needs one organization.\n"
+            "  Pass --org <id>, or set a default with `yertle orgs use <id>`.",
+        )
+
+    with api_errors():
+        node = yertle.nodes.create(
+            title,
+            org_id=org_id,
+            description=description,
+            tags=_tag_filters(tag or []) or None,
+            directories=directory or None,
+            public_id=public_id,
+            commit_message=message,
+        )
+
+    if fmt is Format.JSON:
+        dump_json(node)
+        return
+
+    # Print the id on its own line before anything else: it is the one piece
+    # a caller needs for the next command, and this keeps `... | head -1`
+    # working as a way to capture it.
+    typer.echo(node.id)
+    console = Console()
+    console.print(f"[green]✓[/green] Created [bold]{node.title}[/bold]")
+    # Say it outright rather than leaving it to be discovered. A node that is
+    # missing from `nodes tree` reads as a bug until you know that creating
+    # and attaching are separate operations.
+    console.print("[dim]  Unattached — it will not appear in `yertle nodes tree` yet.[/dim]")
