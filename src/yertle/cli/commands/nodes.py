@@ -15,7 +15,13 @@ from yertle_client.models import (
 from yertle_client.types import Unset
 
 import yertle
-from yertle.cli._context import OrgOption, SingleOrgOption, resolve_one_org, resolve_org
+from yertle.cli._context import (
+    NodeIdArgument,
+    OrgOption,
+    SingleOrgOption,
+    resolve_one_org,
+    resolve_org,
+)
 from yertle.cli._errors import api_errors, die
 from yertle.cli._render import FORMAT_EPILOG, Column, Format, FormatOption, dump_json, render
 
@@ -325,7 +331,7 @@ def _render_show(state: NodeCompleteStateResponse, branch: str) -> None:
 
 @app.command("show")
 def show_node(
-    node_id: Annotated[str, typer.Argument(help="Node id from `yertle nodes list`.")],
+    node_id: NodeIdArgument,
     org: SingleOrgOption = None,
     branch: Annotated[str, typer.Option("--branch", "-b", help="Branch to read.")] = (
         yertle.nodes.DEFAULT_BRANCH

@@ -84,6 +84,20 @@ services connect, and where things live.
   org's root rather than inside the hierarchy. Attaching it to a parent is a
   separate operation that the CLI cannot do yet.
 
+[bold]Branches and history[/bold]
+
+  Every node has its own branches, like a repository of its own — a node's
+  changes are commits on one of them. `main` always exists.
+
+  yertle branches list <node-id>          Branches on a node
+  yertle branches create <node-id> <name> Fork a branch from main
+  yertle branches delete <node-id> <name> Delete a merged branch
+
+  `branches delete` does [bold]not[/bold] check whether a branch was merged — unlike
+  git, it only refuses when the branch has open pull requests, which is what
+  --force overrides. Deleting a branch discards any commits only it has.
+  `main` cannot be deleted.
+
 [bold]Scripting[/bold]
 
   Every data command takes --format json. Errors go to stderr and exit 1, so
