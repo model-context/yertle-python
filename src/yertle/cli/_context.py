@@ -51,6 +51,43 @@ SingleOrgOption = Annotated[
 ]
 
 
+_UUID_LEN = 36
+
+
+def validate_node_id(value: str) -> str:
+    """Return `value` if it is a usable node id, else exit with a hint.
+
+    Node ids are UUIDs and the backend accepts nothing else — a node's
+    `public_id` (`supabase`, `root-9e0aa98f`) 400s, verified 2026-09-23. So a
+    malformed id can be rejected here, before a request, with a message that
+    names the offending value.
+
+    Without this the backend answers `400 badly formed hexadecimal UUID
+    string`, which does not say *which* of the ids in the request was wrong —
+    a branch command sends two — and reads like a server fault rather than a
+    typo. The length hint is there because the way this actually happens is a
+    truncated copy-paste.
+    """
+    stripped = value.strip()
+    try:
+        UUID(stripped)
+    except ValueError:
+        hint = ""
+        if len(stripped) != _UUID_LEN:
+            hint = f" (got {len(stripped)} characters, expected {_UUID_LEN} — truncated?)"
+        die(
+            f"{value!r} is not a node id{hint}.\n"
+            f"  Node ids are UUIDs. Copy one from `yertle nodes list`.",
+        )
+    return stripped
+
+
+NodeIdArgument = Annotated[
+    str,
+    typer.Argument(help="Node id from `yertle nodes list`.", callback=validate_node_id),
+]
+
+
 @dataclass(frozen=True, slots=True)
 class ResolvedOrg:
     """The effective organization, and which rung of the chain supplied it."""
@@ -130,5 +167,6 @@ __all__ = [
     "resolve_one_org",
     "resolve_org",
     "resolve_org_setting",
+    "validate_node_id",
     "validate_org",
 ]

@@ -87,10 +87,18 @@ def create(
 def delete(name: str, *, node_id: str, org_id: str, force: bool = False) -> str:
     """Delete a branch, returning the backend's confirmation message.
 
-    Safe by default, exactly like `git branch -d`: the backend refuses unless
-    the branch has been merged into main (or had a PR that was merged).
-    `force=True` is `git branch -D` — it deletes an unmerged branch and
-    discards the commits unique to it.
+    **This is not `git branch -d`.** `force` gates one thing only: whether
+    the branch has **open pull requests**. `BranchService.delete_branch`
+    checks `get_open_prs_for_branch` and nothing else — there is no
+    merged-into-main check anywhere in the path.
+
+    So a branch carrying commits that exist nowhere else is deleted without
+    complaint, and those commits become unreachable. Verified against prod
+    2026-09-23: a branch whose head had diverged from main deleted cleanly
+    with `force=False`.
+
+    The route's own docstring says deletion requires the branch to be merged.
+    It does not. Treat every delete here as destructive.
 
     `main` cannot be deleted. Deleting a branch requires editor or owner on
     the organization; viewers get a 403.

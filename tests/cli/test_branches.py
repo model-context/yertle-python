@@ -109,7 +109,12 @@ def test_create_accepts_another_base(_client, sync) -> None:
 @patch(_DELETE, return_value=MessageResponse(message="Branch 'feature' deleted"))
 @patch("yertle._client.get_client", return_value=object())
 def test_delete_does_not_force_unless_asked(_client, sync) -> None:
-    """The dangerous form must be opt-in; this is `git branch -d`, not `-D`."""
+    """`force` must be opt-in.
+
+    Note what it actually gates: open pull requests, not merge status. The
+    backend performs no merged-into-main check, so the bare form is still
+    destructive — see `yertle.branches.delete`.
+    """
     result = runner.invoke(app, ["branches", "delete", NODE, "feature", "--org", ORG])
     assert result.exit_code == 0, result.output
     assert sync.call_args.kwargs["force"] is False
@@ -133,3 +138,36 @@ def test_branch_commands_refuse_to_guess_the_organization(_client) -> None:
         result = runner.invoke(app, argv)
         assert result.exit_code == 1, argv
         assert "needs one organization" in result.output
+
+
+@patch(_DELETE)
+@patch(_LIST)
+@patch("yertle._client.get_client", return_value=object())
+def test_a_malformed_node_id_never_reaches_the_wire(_client, list_sync, delete_sync) -> None:
+    """Catch a bad id locally instead of relaying `400 badly formed ... UUID`.
+
+    That backend message does not say which id was wrong — a branch command
+    sends two — and reads like a server fault rather than a typo. The real
+    way this happens is a truncated copy-paste, so the length is named.
+    """
+    truncated = NODE[:-1]
+    result = runner.invoke(app, ["branches", "delete", truncated, "feature", "--org", ORG])
+    assert result.exit_code == 1
+    plain_out = plain(result.output)
+    assert "is not a node id" in plain_out
+    assert "35 characters" in plain_out
+    delete_sync.assert_not_called()
+    list_sync.assert_not_called()
+
+
+@patch(_LIST, return_value=_listing())
+@patch("yertle._client.get_client", return_value=object())
+def test_node_id_is_validated_on_every_verb(_client, _sync) -> None:
+    for argv in (
+        ["branches", "list", "not-a-uuid", "--org", ORG],
+        ["branches", "create", "not-a-uuid", "feature", "--org", ORG],
+        ["branches", "delete", "not-a-uuid", "feature", "--org", ORG],
+    ):
+        result = runner.invoke(app, argv)
+        assert result.exit_code == 1, argv
+        assert "is not a node id" in plain(result.output), argv

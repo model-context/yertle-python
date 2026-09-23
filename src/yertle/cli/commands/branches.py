@@ -14,7 +14,7 @@ from yertle_client.models import BranchResponse
 from yertle_client.types import Unset
 
 import yertle
-from yertle.cli._context import SingleOrgOption, resolve_one_org
+from yertle.cli._context import NodeIdArgument, SingleOrgOption, resolve_one_org
 from yertle.cli._errors import api_errors
 from yertle.cli._render import (
     FORMAT_EPILOG,
@@ -31,8 +31,6 @@ app = typer.Typer(
     no_args_is_help=True,
     epilog=FORMAT_EPILOG,
 )
-
-NodeArgument = Annotated[str, typer.Argument(help="Node id from `yertle nodes list`.")]
 
 
 def _optional(value: object) -> str:
@@ -62,7 +60,7 @@ COLUMNS: list[Column[BranchResponse]] = [
 
 @app.command("list")
 def list_branches(
-    node_id: NodeArgument, org: SingleOrgOption = None, fmt: FormatOption = Format.TABLE
+    node_id: NodeIdArgument, org: SingleOrgOption = None, fmt: FormatOption = Format.TABLE
 ) -> None:
     """List the branches on a node."""
     org_id = resolve_one_org(org, command="branches list")
@@ -80,7 +78,7 @@ def list_branches(
 
 @app.command("create")
 def create_branch(
-    node_id: NodeArgument,
+    node_id: NodeIdArgument,
     name: Annotated[str, typer.Argument(help="Name for the new branch.")],
     org: SingleOrgOption = None,
     base: Annotated[
@@ -110,22 +108,23 @@ def create_branch(
 
 @app.command("delete")
 def delete_branch(
-    node_id: NodeArgument,
+    node_id: NodeIdArgument,
     name: Annotated[str, typer.Argument(help="Branch to delete.")],
     org: SingleOrgOption = None,
     force: Annotated[
         bool,
         typer.Option(
             "--force",
-            help="Delete even if unmerged, discarding commits unique to the branch.",
+            help="Delete even if the branch has open pull requests.",
         ),
     ] = False,
 ) -> None:
     """Delete a branch.
 
-    Safe by default, like `git branch -d`: the backend refuses unless the
-    branch has been merged into main. `--force` is `git branch -D` — it
-    deletes an unmerged branch and discards the commits only it has.
+    Unlike `git branch -d`, this does NOT check whether the branch was
+    merged. The backend gates only on open pull requests, and `--force`
+    overrides that one check. A branch holding commits that exist nowhere
+    else will be deleted without complaint.
 
     `main` cannot be deleted.
     """
