@@ -18,23 +18,27 @@ from yertle_client.api.directories import (
     get_org_hierarchy_orgs_org_id_hierarchy_get,
 )
 from yertle_client.api.nodes import (
-    get_complete_state_by_branch_orgs_org_id_nodes_node_id_tree_branch_complete_get as _complete,
-)
-from yertle_client.api.nodes import (
+    create_node_orgs_org_id_nodes_post,
     list_all_nodes_across_orgs_orgs_all_nodes_get,
     list_nodes_orgs_org_id_nodes_get,
 )
+from yertle_client.api.nodes import (
+    get_complete_state_by_branch_orgs_org_id_nodes_node_id_tree_branch_complete_get as _complete,
+)
 from yertle_client.models import (
+    CreateNodeRequest,
+    CreateNodeRequestTagsType0,
     HierarchyEntryResponse,
     HierarchyResponse,
     NodeCompleteStateResponse,
     NodeListResponse,
     NodeResponse,
 )
+from yertle_client.types import UNSET, Unset
 
 from yertle._client import client
 
-__all__ = ["ALL_ORGS", "DEFAULT_BRANCH", "get", "list", "tree"]
+__all__ = ["ALL_ORGS", "DEFAULT_BRANCH", "create", "get", "list", "tree"]
 
 #: Sentinel for "every organization the caller belongs to" — the backend spells
 #: it this way too, as the literal path segment in `/orgs/all/nodes`.
@@ -154,4 +158,62 @@ def get(
     )
     if not isinstance(response, NodeCompleteStateResponse):
         raise RuntimeError(f"Unexpected response from nodes.get({node_id!r}): {response!r}")
+    return response
+
+
+def create(
+    title: str,
+    *,
+    org_id: str,
+    description: str | None = None,
+    tags: dict[str, str] | None = None,
+    directories: builtins.list[str] | None = None,
+    public_id: str | None = None,
+    commit_message: str | None = None,
+) -> NodeResponse:
+    """Create a node in `org_id`, returning it as the backend stored it.
+
+    The first write in this module. `POST /orgs/{id}/nodes` is a plain
+    request/response — no branch, no state, no concurrency — which is what
+    separates it from every other mutation Yertle has. Changing a node after
+    creation goes through the full-state push instead; see
+    `docs/cli/ROADMAP.md`.
+
+    **The new node is an orphan.** Creating it attaches it to no parent, so
+    the hierarchy endpoint reports it as a *root* — it appears in
+    `nodes.tree()` at the top level, beside the org's real root, rather than
+    under anything. That is the backend's behaviour, not an omission here;
+    attaching is a separate and much more involved operation.
+
+    Tags are passed as a flat `{"team": "backend"}` mapping. The backend
+    normalizes a bare string into `{"value": ...}` and returns the nested
+    form, so what comes back does not match what went in.
+
+    `org_id` cannot be `ALL_ORGS` — a node is created in one organization.
+    """
+    if org_id == ALL_ORGS:
+        raise ValueError("nodes.create() needs a specific org_id, not 'all'.")
+
+    # Each optional field is sent only when the caller set it, so the
+    # backend's own defaults apply otherwise — `description` defaults to "",
+    # `commit_message` to "Initial commit". Passing None explicitly would
+    # override those with null.
+    wire_tags: CreateNodeRequestTagsType0 | Unset = UNSET
+    if tags:
+        wire_tags = CreateNodeRequestTagsType0.from_dict(tags)
+
+    response = create_node_orgs_org_id_nodes_post.sync(
+        client=client(),
+        org_id=UUID(org_id),
+        body=CreateNodeRequest(
+            title=title,
+            description=description if description is not None else UNSET,
+            tags=wire_tags,
+            directories=directories if directories else UNSET,
+            public_id=public_id or UNSET,
+            commit_message=commit_message or UNSET,
+        ),
+    )
+    if not isinstance(response, NodeResponse):
+        raise RuntimeError(f"Unexpected response from nodes.create({title!r}): {response!r}")
     return response

@@ -7,7 +7,6 @@ itself would pass even if the CLI stopped calling the SDK at all.
 
 import datetime
 import json
-import re
 from unittest.mock import patch
 
 import pytest
@@ -19,25 +18,12 @@ from yertle_client.models import (
     OrganizationResponseRoleType0,
 )
 
+from tests._output import plain as _cells
 from yertle.cli._context import ORG_ENV_VAR
 from yertle.cli.main import app
 from yertle.shared import auth as auth_mod
 
 runner = CliRunner()
-
-# Rich highlights option-shaped text and wraps to width; see tests/cli/test_help.py.
-_ANSI = re.compile(r"\x1b\[[0-9;]*m")
-_BOX = re.compile(r"[\u2500-\u257f]")
-
-
-def _cells(output: str) -> str:
-    """Table output as flat text, so a row can be matched as its cell values.
-
-    Strips the colour codes and the box-drawing borders, then collapses
-    whitespace — leaving `"Beta Corp 3 12 public owner"` for a row, which is
-    readable in the assertion and independent of column widths.
-    """
-    return " ".join(_BOX.sub(" ", _ANSI.sub("", output)).split())
 
 
 def _fake_response() -> OrganizationListResponse:

@@ -15,7 +15,7 @@ from yertle_client.models import (
 from yertle_client.types import Unset
 
 import yertle
-from yertle.cli._context import OrgOption, resolve_org
+from yertle.cli._context import OrgOption, SingleOrgOption, resolve_one_org, resolve_org
 from yertle.cli._errors import api_errors, die
 from yertle.cli._render import FORMAT_EPILOG, Column, Format, FormatOption, dump_json, render
 
@@ -326,19 +326,14 @@ def _render_show(state: NodeCompleteStateResponse, branch: str) -> None:
 @app.command("show")
 def show_node(
     node_id: Annotated[str, typer.Argument(help="Node id from `yertle nodes list`.")],
-    org: OrgOption = None,
+    org: SingleOrgOption = None,
     branch: Annotated[str, typer.Option("--branch", "-b", help="Branch to read.")] = (
         yertle.nodes.DEFAULT_BRANCH
     ),
     fmt: FormatOption = Format.TABLE,
 ) -> None:
     """Show a node's details — tags, parents, children and connections."""
-    org_id = resolve_org(org)
-    if org_id == yertle.nodes.ALL_ORGS:
-        die(
-            "`nodes show` needs one organization.\n"
-            "  Pass --org <id>, or set a default with `yertle orgs use <id>`.",
-        )
+    org_id = resolve_one_org(org, command="nodes show")
 
     with api_errors():
         state = yertle.nodes.get(node_id, org_id=org_id, branch=branch)
@@ -350,7 +345,11 @@ def show_node(
 
 
 def _tag_filters(pairs: builtins.list[str]) -> dict[str, str]:
-    """Parse repeated `--tag key=value` options."""
+    """Parse repeated `--tag key=value` options.
+
+    Shared by `search` (which filters on them) and `create` (which sets them),
+    so the two cannot drift on what `--tag` accepts.
+    """
     filters: dict[str, str] = {}
     for pair in pairs:
         key, separator, value = pair.partition("=")
@@ -400,7 +399,7 @@ CONNECTION_COLUMNS: builtins.list[Column[Any]] = [
 @app.command("search")
 def search_nodes(
     query: Annotated[str, typer.Argument(help="Natural-language query.")],
-    org: OrgOption = None,
+    org: SingleOrgOption = None,
     top_k: Annotated[int, typer.Option("--top-k", "-k", help="Max matches to return.")] = 5,
     expand: Annotated[
         yertle.search.Expansion | None,
@@ -425,12 +424,7 @@ def search_nodes(
     fmt: FormatOption = Format.TABLE,
 ) -> None:
     """Find the nodes most likely to match a natural-language query."""
-    org_id = resolve_org(org)
-    if org_id == yertle.nodes.ALL_ORGS:
-        die(
-            "`nodes search` needs one organization.\n"
-            "  Pass --org <id>, or set a default with `yertle orgs use <id>`.",
-        )
+    org_id = resolve_one_org(org, command="nodes search")
 
     with api_errors():
         result = yertle.search.retrieve(
@@ -479,3 +473,79 @@ def search_nodes(
                     f"\n[bold]{node.get('title', '')}[/bold]  [dim]{match['node_id']}[/dim]"
                 )
                 console.print(text)
+
+
+@app.command("create")
+def create_node(
+    title: Annotated[str, typer.Argument(help="Node title.")],
+    org: SingleOrgOption = None,
+    description: Annotated[
+        str | None,
+        typer.Option("--description", "-d", help="Node description."),
+    ] = None,
+    tag: Annotated[
+        builtins.list[str] | None,
+        typer.Option("--tag", help="Tag to set (key=value, repeatable)."),
+    ] = None,
+    directory: Annotated[
+        builtins.list[str] | None,
+        typer.Option("--dir", help="Directory path to file it under (repeatable)."),
+    ] = None,
+    public_id: Annotated[
+        str | None,
+        typer.Option("--public-id", help="Custom public identifier. Generated if omitted."),
+    ] = None,
+    message: Annotated[
+        str | None,
+        typer.Option("--message", "-m", help="Commit message. Defaults to 'Initial commit'."),
+    ] = None,
+    fmt: FormatOption = Format.TABLE,
+) -> None:
+    """Create a node.
+
+    The node is created unattached — it belongs to the organization but sits
+    under no parent, so `nodes tree` shows it at the top level beside the
+    org's root rather than inside the hierarchy. Attaching it to a parent is
+    a separate operation against that parent's branch, which the CLI cannot
+    do yet (see docs/cli/ROADMAP.md).
+
+    Repeat --tag and --dir to set more than one:
+
+        yertle nodes create "Checkout API" \\
+            --tag team=backend --tag tier=1 --dir /services --dir /apis
+    """
+    org_id = resolve_one_org(org, command="nodes create")
+
+    with api_errors():
+        node = yertle.nodes.create(
+            title,
+            org_id=org_id,
+            description=description,
+            tags=_tag_filters(tag or []) or None,
+            directories=directory or None,
+            public_id=public_id,
+            commit_message=message,
+        )
+
+    if fmt is Format.JSON:
+        dump_json(node)
+        return
+
+    # Print the id on its own line before anything else: it is the one piece
+    # a caller needs for the next command, and this keeps `... | head -1`
+    # working as a way to capture it.
+    typer.echo(node.id)
+    console = Console()
+    console.print(f"[green]✓[/green] Created [bold]{node.title}[/bold]")
+    # Say it outright rather than leaving it to be discovered. A node sitting
+    # at the top of `nodes tree` beside the org's root looks like a mistake
+    # until you know that creating and attaching are separate operations.
+    #
+    # An earlier version of this line claimed the node would not appear in
+    # `nodes tree` at all. It does: the hierarchy endpoint treats a parentless
+    # node as a root. The claim survived its unit tests, which asserted only
+    # that the word "Unattached" was printed, and was caught by running the
+    # command against a real backend.
+    console.print(
+        "[dim]  Unattached — `yertle nodes tree` lists it as a root, not under a parent.[/dim]"
+    )

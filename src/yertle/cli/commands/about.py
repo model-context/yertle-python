@@ -74,12 +74,27 @@ services connect, and where things live.
   what it is called. Tags on the result usually carry the ARN, repo or owner
   you actually needed.
 
+[bold]Making changes[/bold]
+
+  yertle nodes create "<title>"       Create a node
+  yertle nodes create "<title>" --tag team=backend --dir /services
+
+  A new node is created [bold]unattached[/bold]: it belongs to the organization but
+  sits under no parent, so nodes tree lists it at the top level beside the
+  org's root rather than inside the hierarchy. Attaching it to a parent is a
+  separate operation that the CLI cannot do yet.
+
 [bold]Scripting[/bold]
 
   Every data command takes --format json. Errors go to stderr and exit 1, so
   piping is safe:
 
       yertle nodes search "payment path" --format json | jq '.matches[].title'
+
+  Commands that create something print the new id on the first line, so it
+  can be captured directly:
+
+      NODE=$(yertle nodes create "Checkout API" | head -1)
 
 [bold]More[/bold]
 

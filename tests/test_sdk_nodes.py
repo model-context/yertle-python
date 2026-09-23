@@ -171,3 +171,27 @@ def test_get_refuses_all_orgs() -> None:
 def test_get_raises_on_an_unexpected_response(_get_client, _sync) -> None:
     with pytest.raises(RuntimeError, match="Unexpected response"):
         yertle.nodes.get("n1", org_id=ORG)
+
+
+@patch("yertle.nodes.create_node_orgs_org_id_nodes_post.sync")
+@patch("yertle._client.get_client", return_value=object())
+def test_create_returns_the_node(_get_client, sync) -> None:
+    sync.return_value = _node("new-1")
+    node = yertle.nodes.create("New", org_id="8f14e45f-ceea-467a-9575-28db8d0dc4db")
+    assert node.id == "new-1"
+
+
+@patch("yertle._client.get_client", return_value=object())
+def test_create_rejects_all_orgs(_get_client) -> None:
+    """A node is created in one organization; 'all' is not a destination."""
+    with pytest.raises(ValueError, match="not 'all'"):
+        yertle.nodes.create("New", org_id=yertle.nodes.ALL_ORGS)
+
+
+@patch("yertle.nodes.create_node_orgs_org_id_nodes_post.sync")
+@patch("yertle._client.get_client", return_value=object())
+def test_create_raises_on_an_unexpected_response(_get_client, sync) -> None:
+    """A 422 body arrives where a model was expected; that is not a node."""
+    sync.return_value = None
+    with pytest.raises(RuntimeError, match="Unexpected response"):
+        yertle.nodes.create("New", org_id="8f14e45f-ceea-467a-9575-28db8d0dc4db")
