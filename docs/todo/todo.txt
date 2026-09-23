@@ -173,3 +173,38 @@ RELATED
   Item 1 above. `--format json` is unaffected by any of this: it dumps the
   full model, so the complete UUID stays available to scripts and agents no
   matter what the table shows.
+
+
+3. CLI is read-only; write commands not yet built
+---------------------------------------------------
+
+STATUS: planned, not started. Recorded 2026-09-22.
+
+See docs/cli/ROADMAP.md for the full plan. Summary:
+
+  Phase 1  simple writes — nodes create/delete, branches, PRs. Flat request
+           bodies, no shared state, no concurrency.
+  Phase 2  one honest push layer. Everything state-shaped (edit, attach,
+           connect, lay out) goes through `PUT .../tree/{branch}/push`, which
+           is a FULL-STATE REPLACE with a required expected_head_commit.
+           `nodes attach` is variadic from day one — many children, one push,
+           one commit. A `--parent` flag on `create` was considered and
+           rejected; see the roadmap for why.
+  Phase 3  `yertle apply -f diagram.json` — declarative subtree authoring,
+           which is what the push endpoint is natively shaped for. The read
+           (`GET /complete`) returns `_branch_context.commit`, so a document
+           produced by a read carries its own expected_head_commit; `apply`
+           refuses one that does not. That makes read-before-write a
+           precondition rather than an instruction, which is the closest a
+           CLI gets to what an MCP tool description buys you.
+
+THE ONE THING TO KNOW BEFORE TOUCHING ANY OF THIS
+
+  There is no node update endpoint. Verified 2026-09-22: the complete set of
+  node operations is create, delete, list, list-all, get-complete,
+  get-canvas, get-branch-head, push. No PATCH, no PUT /nodes/{id}.
+
+  So "edit a node's title" and "attach a child" are the SAME operation. Both
+  are a full-state push, and a push that sends only the fields it means to
+  change will silently delete the node's tags and directories while returning
+  200 and a commit id.
