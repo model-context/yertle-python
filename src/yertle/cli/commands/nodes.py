@@ -518,6 +518,11 @@ def create_node(
     org's root rather than inside the hierarchy. Attaching it to a parent is
     a separate operation against that parent's branch, which the CLI cannot
     do yet (see docs/cli/ROADMAP.md).
+
+    Repeat --tag and --dir to set more than one:
+
+        yertle nodes create "Checkout API" \\
+            --tag team=backend --tag tier=1 --dir /services --dir /apis
     """
     org_id = resolve_org(org)
     if org_id == yertle.nodes.ALL_ORGS:
