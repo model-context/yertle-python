@@ -256,6 +256,79 @@ see nor reason about.
    `test_04_attach_child_node_branch.py` are that test's choice, not a fixed
    point scheme. Layout code should assume a free float plane.
 
+#### Safety rails on `apply`
+
+Four small mechanisms, each refusing for one specific reason, rather than one
+blanket `--force`. A single catch-all flag ends up in an agent's template line
+and then gates nothing.
+
+| Mechanism | Guards against | On failure |
+|---|---|---|
+| Base commit in the document (`--expected-commit` overrides) | Concurrent modification | 409 — "branch moved, re-read" |
+| Missing base commit | A fabricated document | Refuse, naming the read that produces one |
+| Three-way diff | — | Always shown; `--dry-run` prints and exits 0 |
+| `--allow-deletes` | Clobbering | Refuse, listing exactly what would be deleted |
+
+**Concurrency and completeness are different problems.** `expected_head_commit`
+only solves the first. An agent can fetch the head cheaply from
+`/tree/{branch}/head` without ever reading the state, hand-write a document
+containing only the children it cares about, and push it with a perfectly
+valid commit id — deleting the parent's tags and directories on the way
+through. The commit was current; the state was incomplete. So the commit check
+cannot be the deletion gate, and the deletion gate cannot be the commit check.
+
+**Derive intent, do not require proof of it.** Because the document carries a
+base commit, `apply` can re-read the state at that commit and classify every
+difference:
+
+    in document, not in base  ->  addition
+    in both, different        ->  modification
+    in base, not in document  ->  deletion
+
+That turns "did they read first?" from a matter of trust into arithmetic, and
+the gate then goes on what the change *does* rather than on whether a ritual
+was followed. It also makes for an honest error: "this would delete 3 tags and
+1 child; pass --allow-deletes if you meant it" names a consequence, where "you
+did not read first" only describes process.
+
+If the current head differs from the document's base commit, that is drift,
+not merely a conflict — say so, rather than failing with a bare 409.
+
+**What the diff must show**, beyond additions and deletions:
+
+    Applying to "Root" (a64edca5) on branch main
+
+      Children       + Payments API, + Ledger DB
+                     - Legacy Queue
+      Tags           ~ team: backend -> platform
+      Directories    (unchanged)
+      Child pins     ! 4 children will be re-pinned to their current head
+
+The last line is hazard 2 above. Nobody would think to ask for it, and the
+diff is the only place it becomes visible — a push that changes one title
+silently advances every child's snapshot pin.
+
+**Validate locally before sending.** A FastAPI 422 is a nested blob;
+`diagram.json: visual_properties[2] missing child_node_id` is actionable.
+Worth checking further that every `child_node_id` exists and belongs to this
+org — a typo'd UUID otherwise pushes successfully and leaves a visual property
+pointing at nothing.
+
+**Do not validate layout.** Uniform spacing is not correct-by-definition: real
+diagrams have clusters, deliberate gaps, and nodes of different sizes.
+Rejecting a valid layout for failing a house style is how a tool gets routed
+around. The useful version is generation — `--auto-layout` places nodes that
+have no position and leaves explicit ones alone, which solves the actual
+problem (an agent emitting nodes without coordinates) without asserting taste.
+Any spacing check should be a warning naming what looks off, never an error.
+
+**Confirm on a TTY, require the flag otherwise** — the `gh` convention. Never
+block on a prompt when stdin is not a terminal; that is the one failure mode
+that hangs an agent indefinitely rather than failing it.
+
+**Sequencing:** none of this can be built before hazard 1 is settled. A
+trustworthy diff requires knowing which keys `push` actually consumes.
+
 #### Open
 
 Whether `apply` creates missing nodes or requires them to exist first.
@@ -274,7 +347,9 @@ about partial failure.
 - **Every mutating command prints the resulting id and supports
   `--format json`**, so one command's output feeds the next.
 - **`--dry-run` shows the diff before pushing.** This matters far more than
-  usual when the API's native mode is full-state replace.
+  usual when the API's native mode is full-state replace. Gate the destructive
+  half specifically (`--allow-deletes`), never behind a blanket `--force` —
+  see *Safety rails on `apply`*.
 - **Idempotence where it is cheap.** Attaching an already-attached child is a
   no-op success, not a duplicate.
 - **Conflicts are a distinct, explainable failure.** A 409 means the branch
