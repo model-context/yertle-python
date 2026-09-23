@@ -5,7 +5,7 @@
     ...     print(org.name)
 
 Resources live in per-feature modules (`yertle.orgs`, `yertle.nodes`,
-`yertle.search`, future `yertle.branches`, …) and are re-exported here. Default-client plumbing
+`yertle.search`, `yertle.branches`, …) and are re-exported here. Default-client plumbing
 lives in `yertle._client`; users interact with it via the top-level
 `yertle.client()` and `yertle.configure(...)` re-exports.
 
@@ -19,7 +19,7 @@ from importlib.metadata import version as _dist_version
 
 from yertle_client.client import AuthenticatedClient
 
-from yertle import nodes, orgs, search
+from yertle import branches, nodes, orgs, search
 from yertle._client import client, configure, get_client
 
 try:
@@ -32,6 +32,7 @@ except PackageNotFoundError:  # pragma: no cover — running from an uninstalled
     __version__ = "0.0.0+unknown"
 __all__ = [
     "AuthenticatedClient",
+    "branches",
     "client",
     "configure",
     "get_client",
