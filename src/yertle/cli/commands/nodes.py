@@ -15,7 +15,7 @@ from yertle_client.models import (
 from yertle_client.types import Unset
 
 import yertle
-from yertle.cli._context import OrgOption, resolve_org
+from yertle.cli._context import OrgOption, SingleOrgOption, resolve_one_org, resolve_org
 from yertle.cli._errors import api_errors, die
 from yertle.cli._render import FORMAT_EPILOG, Column, Format, FormatOption, dump_json, render
 
@@ -326,19 +326,14 @@ def _render_show(state: NodeCompleteStateResponse, branch: str) -> None:
 @app.command("show")
 def show_node(
     node_id: Annotated[str, typer.Argument(help="Node id from `yertle nodes list`.")],
-    org: OrgOption = None,
+    org: SingleOrgOption = None,
     branch: Annotated[str, typer.Option("--branch", "-b", help="Branch to read.")] = (
         yertle.nodes.DEFAULT_BRANCH
     ),
     fmt: FormatOption = Format.TABLE,
 ) -> None:
     """Show a node's details — tags, parents, children and connections."""
-    org_id = resolve_org(org)
-    if org_id == yertle.nodes.ALL_ORGS:
-        die(
-            "`nodes show` needs one organization.\n"
-            "  Pass --org <id>, or set a default with `yertle orgs use <id>`.",
-        )
+    org_id = resolve_one_org(org, command="nodes show")
 
     with api_errors():
         state = yertle.nodes.get(node_id, org_id=org_id, branch=branch)
@@ -404,7 +399,7 @@ CONNECTION_COLUMNS: builtins.list[Column[Any]] = [
 @app.command("search")
 def search_nodes(
     query: Annotated[str, typer.Argument(help="Natural-language query.")],
-    org: OrgOption = None,
+    org: SingleOrgOption = None,
     top_k: Annotated[int, typer.Option("--top-k", "-k", help="Max matches to return.")] = 5,
     expand: Annotated[
         yertle.search.Expansion | None,
@@ -429,12 +424,7 @@ def search_nodes(
     fmt: FormatOption = Format.TABLE,
 ) -> None:
     """Find the nodes most likely to match a natural-language query."""
-    org_id = resolve_org(org)
-    if org_id == yertle.nodes.ALL_ORGS:
-        die(
-            "`nodes search` needs one organization.\n"
-            "  Pass --org <id>, or set a default with `yertle orgs use <id>`.",
-        )
+    org_id = resolve_one_org(org, command="nodes search")
 
     with api_errors():
         result = yertle.search.retrieve(
@@ -488,7 +478,7 @@ def search_nodes(
 @app.command("create")
 def create_node(
     title: Annotated[str, typer.Argument(help="Node title.")],
-    org: OrgOption = None,
+    org: SingleOrgOption = None,
     description: Annotated[
         str | None,
         typer.Option("--description", "-d", help="Node description."),
@@ -524,12 +514,7 @@ def create_node(
         yertle nodes create "Checkout API" \\
             --tag team=backend --tag tier=1 --dir /services --dir /apis
     """
-    org_id = resolve_org(org)
-    if org_id == yertle.nodes.ALL_ORGS:
-        die(
-            "`nodes create` needs one organization.\n"
-            "  Pass --org <id>, or set a default with `yertle orgs use <id>`.",
-        )
+    org_id = resolve_one_org(org, command="nodes create")
 
     with api_errors():
         node = yertle.nodes.create(

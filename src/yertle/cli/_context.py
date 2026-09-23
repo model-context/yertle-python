@@ -36,6 +36,20 @@ OrgOption = Annotated[
     ),
 ]
 
+# Not every command can span organizations. `nodes show`, `nodes search` and
+# `nodes create` each act on exactly one, and offering them an option value
+# they will refuse is worse than not offering it — the help page becomes a
+# claim the command does not honour.
+SingleOrgOption = Annotated[
+    str | None,
+    typer.Option(
+        "--org",
+        "-o",
+        help=f"Organization to act on. Defaults to ${ORG_ENV_VAR}, then "
+        f"`yertle orgs use`. This command acts on one org, so 'all' is not valid.",
+    ),
+]
+
 
 @dataclass(frozen=True, slots=True)
 class ResolvedOrg:
@@ -90,11 +104,30 @@ def resolve_org(override: str | None = None) -> str:
     return validate_org(resolve_org_setting(override).value)
 
 
+def resolve_one_org(override: str | None, *, command: str) -> str:
+    """Resolve to exactly one organization, exiting if the answer is 'all'.
+
+    The default chain ends at `ALL_ORGS`, which suits a listing and cannot
+    work for a command scoped to a single org. Three commands need this and
+    each had its own copy of the check and the message; naming `command` keeps
+    the error specific while the wording stays in one place.
+    """
+    org_id = resolve_org(override)
+    if org_id == ALL_ORGS:
+        die(
+            f"`{command}` needs one organization.\n"
+            f"  Pass --org <id>, or set a default with `yertle orgs use <id>`.",
+        )
+    return org_id
+
+
 __all__ = [
     "ALL_ORGS",
     "ORG_ENV_VAR",
     "OrgOption",
     "ResolvedOrg",
+    "SingleOrgOption",
+    "resolve_one_org",
     "resolve_org",
     "resolve_org_setting",
     "validate_org",
