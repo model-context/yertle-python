@@ -230,14 +230,34 @@ see nor reason about.
 
 #### Hazards to settle before building
 
-1. **The read is a superset of the write.** `push`'s `state` takes
-   `node` / `tags` / `directories` / `visual_properties`. The read also returns
-   `child_nodes`, `parent_nodes`, `ingress_connections`, `egress_connections`
-   and `metadata` — all derived views. A round-trip must project down. What
-   `push` does with the extra keys is **unknown**: `state_diff_service.
-   compare_states` may create spurious objects. Test this against a scratch
-   org before building on it. Assuming it is fine is exactly the
-   fixture-written-from-memory trap.
+1. **SETTLED 2026-09-23** — the read is a superset of the write, and that
+   turns out to be harmless. `push`'s `state` takes **five** sections:
+   `node` / `tags` / `directories` / `visual_properties` / `connections`.
+   An earlier version of this doc said four and omitted `connections`,
+   which is half of what "build a diagram" means — it is handled in
+   `state_diff_service.compare_states`, same as the rest.
+
+   The read also returns `_branch_context`, `child_nodes`, `parent_nodes`,
+   `ingress_connections`, `egress_connections`, `metadata` and
+   `documentation` — all derived views, about 29% of the payload on a
+   four-child node.
+
+   `compare_states` matches sections by name (`if "tags" in new_state`),
+   so unknown top-level keys are **silently ignored**. Verified against
+   prod: pushing `/complete`'s entire response back verbatim is accepted
+   and lossless — tags, directories, title and description all survive.
+
+   Nested keys behave differently, and the difference is useful:
+   `visual_properties`, `connections` and `tags` items are rebuilt from an
+   explicit field list, so unknown keys inside them are **dropped** —
+   which means a document can carry read-only annotations (a child's
+   title beside its id) and still round-trip. `node` is the exception: it
+   is stored whole, so junk put there is persisted.
+
+   This is being designed properly backend-side rather than worked around
+   here — see yertle#374, which proposes
+   `GET /orgs/{org}/nodes/{node}/tree/{branch}` returning a document that
+   is valid push input.
 
 2. **Every push re-pins every child.** `node_service.py`:
 
