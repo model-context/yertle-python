@@ -191,7 +191,12 @@ See docs/cli/ROADMAP.md for the full plan. Summary:
            one commit. A `--parent` flag on `create` was considered and
            rejected; see the roadmap for why.
   Phase 3  `yertle apply -f diagram.json` — declarative subtree authoring,
-           which is what the push endpoint is natively shaped for.
+           which is what the push endpoint is natively shaped for. The read
+           (`GET /complete`) returns `_branch_context.commit`, so a document
+           produced by a read carries its own expected_head_commit; `apply`
+           refuses one that does not. That makes read-before-write a
+           precondition rather than an instruction, which is the closest a
+           CLI gets to what an MCP tool description buys you.
 
 THE ONE THING TO KNOW BEFORE TOUCHING ANY OF THIS
 

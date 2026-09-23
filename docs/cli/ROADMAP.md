@@ -178,6 +178,8 @@ mandatory, and should be written before the feature.
 
 ### Phase 3 — declarative subtree authoring
 
+    yertle nodes get <id> > diagram.json     # state, and its own base commit
+    # ...edit...
     yertle apply -f diagram.json
 
 The whole desired state of a subtree in one document: nodes, containment,
@@ -185,9 +187,80 @@ connections, positions. Maps 1:1 onto `push` with no translation layer, and is
 the shape a model is best at — emit one document rather than orchestrate
 twenty calls that can each fail halfway.
 
-Open: whether `apply` creates missing nodes or requires them to exist first.
-Creating them makes the document self-contained (the stated ideal workflow in
-one command) but means `apply` spans both endpoint families and has to reason
+#### Why this is the target, and not just ergonomics
+
+An MCP server can tell an agent "read the diagram before writing to it,"
+because the instruction sits inches from the call. A CLI cannot match that.
+`--help` is a real channel — it is how an agent learns any CLI, and why `gh`
+and `aws` work well for them — and error messages are a better one still
+(`git`'s `hint:` lines teach more than its documentation does). But all of it
+is **advice an agent can skip**.
+
+So do not rely on it. Make the unsafe thing impossible instead.
+
+*Verified 2026-09-22:* `GET /complete` returns an undocumented top-level key,
+present only in `additional_properties` and absent from the typed model:
+
+    "_branch_context": {
+      "branch": "main",
+      "commit": "a64edca5-a874-4255-a22b-4066712d89ee",
+      "loaded_from_branch": true
+    }
+
+**The same read that returns the state returns its base commit** — exactly
+what `push` requires as `expected_head_commit`. That collapses the problem:
+
+- `nodes get` emits a document that is precisely `apply`'s input format,
+  carrying its own base commit.
+- **`apply` refuses a document with no base commit**, with a message naming
+  the read that produces one.
+
+An agent cannot skip the read, because the read is the only way to obtain a
+valid input. An instruction has been replaced with a precondition. Concurrency
+falls out for free: a stale embedded commit is a specific, explainable 409
+rather than a silent clobber.
+
+This is `kubectl get -o yaml` -> edit -> `kubectl apply -f`, and it is why
+that workflow is safe for agents with no tool description attached.
+
+A verb-per-mutation surface cannot get here. `nodes attach --to P` must do a
+hidden read, and a hidden read is a hidden merge policy the caller can neither
+see nor reason about.
+
+#### Hazards to settle before building
+
+1. **The read is a superset of the write.** `push`'s `state` takes
+   `node` / `tags` / `directories` / `visual_properties`. The read also returns
+   `child_nodes`, `parent_nodes`, `ingress_connections`, `egress_connections`
+   and `metadata` — all derived views. A round-trip must project down. What
+   `push` does with the extra keys is **unknown**: `state_diff_service.
+   compare_states` may create spurious objects. Test this against a scratch
+   org before building on it. Assuming it is fine is exactly the
+   fixture-written-from-memory trap.
+
+2. **Every push re-pins every child.** `node_service.py`:
+
+       if "ref" not in vp:
+           vp["ref"] = {}
+       vp["ref"]["snapshot_commit_id"] = str(child_branch.head_commit)
+
+   Unconditional, from the child's *current* head. So a push that changes only
+   the parent's title silently advances every child's pin, and the
+   `?resolve_children=snapshot` view changes without anyone asking. **An apply
+   that looks like a no-op is not semantically a no-op.** A dry run has to
+   surface it, and the backend arguably should stop overwriting a `ref` the
+   client supplied.
+
+3. **Coordinates are unbounded floats.** Real data has
+   `position_x: -129.664158033288`. The `250000` integers in
+   `test_04_attach_child_node_branch.py` are that test's choice, not a fixed
+   point scheme. Layout code should assume a free float plane.
+
+#### Open
+
+Whether `apply` creates missing nodes or requires them to exist first.
+Creating them makes the document self-contained — the whole ideal workflow in
+one command — but means `apply` spans both endpoint families and has to reason
 about partial failure.
 
 ## Principles for agent-facing commands
