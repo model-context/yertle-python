@@ -114,8 +114,9 @@ No state machinery, no concurrency. Establishes the conventions in
 
 **Known wart to design around:** a created node is an orphan. After two
 creates, `test_04` asserts `visual_properties_main: 0` — nothing is attached to
-anything. The node shows up in `nodes list` but hangs off nothing in `nodes
-tree`. An agent's first attempt will produce an invisible node, and the fix
+anything. The hierarchy endpoint then reports it as a *root*, so `nodes tree`
+lists it at the top level beside the org's real root rather than inside the
+hierarchy. An agent's first attempt will produce an invisible node, and the fix
 requires understanding branches, head commits and full-state pushes.
 
 Fix it in `create`'s **output**, not its signature: print the new id and the

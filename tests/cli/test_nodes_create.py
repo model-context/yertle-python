@@ -115,10 +115,19 @@ def test_create_prints_the_id_first(_client, _sync) -> None:
 
 @patch(_CREATE, return_value=_created())
 @patch("yertle._client.get_client", return_value=object())
-def test_create_says_the_node_is_unattached(_client, _sync) -> None:
-    """A node missing from `nodes tree` reads as a bug until you are told why."""
+def test_create_says_where_the_unattached_node_shows_up(_client, _sync) -> None:
+    """The notice must describe what actually happens, not just say "unattached".
+
+    The first version of this line claimed the node would not appear in
+    `nodes tree`. It does — the hierarchy endpoint treats a parentless node as
+    a root — and the original test passed anyway, because it only looked for
+    the word "Unattached". Pin the specific claim.
+    """
     result = runner.invoke(app, ["nodes", "create", "Checkout API", "--org", ORG])
-    assert "Unattached" in result.output
+    plain = " ".join(result.output.split())
+    assert "Unattached" in plain
+    assert "as a root" in plain
+    assert "not appear" not in plain
 
 
 @patch(_CREATE, return_value=_created())

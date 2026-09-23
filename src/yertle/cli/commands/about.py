@@ -80,9 +80,9 @@ services connect, and where things live.
   yertle nodes create "<title>" --tag team=backend --dir /services
 
   A new node is created [bold]unattached[/bold]: it belongs to the organization but
-  sits under no parent, so it shows up in nodes list and not in nodes tree.
-  Attaching it to a parent is a separate operation that the CLI cannot do
-  yet.
+  sits under no parent, so nodes tree lists it at the top level beside the
+  org's root rather than inside the hierarchy. Attaching it to a parent is a
+  separate operation that the CLI cannot do yet.
 
 [bold]Scripting[/bold]
 

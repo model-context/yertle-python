@@ -514,9 +514,10 @@ def create_node(
     """Create a node.
 
     The node is created unattached — it belongs to the organization but sits
-    under no parent, so it appears in `nodes list` and not in `nodes tree`.
-    Attaching it is a separate operation against the parent's branch, which
-    the CLI cannot do yet (see docs/cli/ROADMAP.md).
+    under no parent, so `nodes tree` shows it at the top level beside the
+    org's root rather than inside the hierarchy. Attaching it to a parent is
+    a separate operation against that parent's branch, which the CLI cannot
+    do yet (see docs/cli/ROADMAP.md).
     """
     org_id = resolve_org(org)
     if org_id == yertle.nodes.ALL_ORGS:
@@ -546,7 +547,15 @@ def create_node(
     typer.echo(node.id)
     console = Console()
     console.print(f"[green]✓[/green] Created [bold]{node.title}[/bold]")
-    # Say it outright rather than leaving it to be discovered. A node that is
-    # missing from `nodes tree` reads as a bug until you know that creating
-    # and attaching are separate operations.
-    console.print("[dim]  Unattached — it will not appear in `yertle nodes tree` yet.[/dim]")
+    # Say it outright rather than leaving it to be discovered. A node sitting
+    # at the top of `nodes tree` beside the org's root looks like a mistake
+    # until you know that creating and attaching are separate operations.
+    #
+    # An earlier version of this line claimed the node would not appear in
+    # `nodes tree` at all. It does: the hierarchy endpoint treats a parentless
+    # node as a root. The claim survived its unit tests, which asserted only
+    # that the word "Unattached" was printed, and was caught by running the
+    # command against a real backend.
+    console.print(
+        "[dim]  Unattached — `yertle nodes tree` lists it as a root, not under a parent.[/dim]"
+    )

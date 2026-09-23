@@ -179,10 +179,11 @@ def create(
     creation goes through the full-state push instead; see
     `docs/cli/ROADMAP.md`.
 
-    **The new node is an orphan.** Creating it attaches it to nothing, so it
-    appears in `nodes.list()` but hangs off nothing in `nodes.tree()`. That is
-    the backend's behaviour, not an omission here — attaching is a separate,
-    and much more involved, operation.
+    **The new node is an orphan.** Creating it attaches it to no parent, so
+    the hierarchy endpoint reports it as a *root* — it appears in
+    `nodes.tree()` at the top level, beside the org's real root, rather than
+    under anything. That is the backend's behaviour, not an omission here;
+    attaching is a separate and much more involved operation.
 
     Tags are passed as a flat `{"team": "backend"}` mapping. The backend
     normalizes a bare string into `{"value": ...}` and returns the nested
