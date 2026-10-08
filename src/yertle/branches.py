@@ -15,6 +15,7 @@ Module-as-namespace, following the shape `orgs.py` established.
 from __future__ import annotations
 
 import builtins
+from uuid import UUID
 
 from yertle_client.api.branches import (
     create_branch_orgs_org_id_nodes_node_id_branches_post,
@@ -33,10 +34,11 @@ from yertle.nodes import DEFAULT_BRANCH
 
 __all__ = ["DEFAULT_BRANCH", "create", "delete", "list"]
 
-# Unlike the node and org endpoints, these take `org_id` as a plain string in
-# the generated signature rather than a UUID. Passing a `UUID` here would be
-# the mistyped-parameter mistake `nodes._fetch_page` documents in reverse, so
-# the strings are passed through untouched.
+# `org_id` is converted to `UUID` for the wire call, matching `nodes.py`.
+# Until yertle-client 0.3.1 these endpoints typed it as a plain `str` while
+# their node-side siblings used `UUID`; the authz work that made every
+# `/orgs/{org_id}/...` route check membership (yertle#380) normalised them.
+# The public signature here stays `str`, so callers are unaffected.
 
 
 # `list` shadows the builtin inside this module — annotations reference
@@ -53,7 +55,7 @@ def list(node_id: str, *, org_id: str) -> builtins.list[BranchResponse]:
     """
     response = list_branches_orgs_org_id_nodes_node_id_branches_get.sync(
         client=client(),
-        org_id=org_id,
+        org_id=UUID(org_id),
         node_id=node_id,
     )
     if not isinstance(response, BranchListResponse):
@@ -75,7 +77,7 @@ def create(
     """
     response = create_branch_orgs_org_id_nodes_node_id_branches_post.sync(
         client=client(),
-        org_id=org_id,
+        org_id=UUID(org_id),
         node_id=node_id,
         body=CreateBranchRequest(name=name, base_branch=base_branch),
     )
@@ -105,7 +107,7 @@ def delete(name: str, *, node_id: str, org_id: str, force: bool = False) -> str:
     """
     response = delete_branch_orgs_org_id_nodes_node_id_branches_branch_name_delete.sync(
         client=client(),
-        org_id=org_id,
+        org_id=UUID(org_id),
         node_id=node_id,
         branch_name=name,
         force=force,

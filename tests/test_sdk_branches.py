@@ -7,6 +7,7 @@ form rather than the destructive one.
 
 import datetime
 from unittest.mock import patch
+from uuid import UUID
 
 import pytest
 from yertle_client.models import (
@@ -43,7 +44,10 @@ def test_list_unwraps_the_envelope(_get_client, sync) -> None:
     branches = yertle.branches.list(NODE, org_id=ORG)
     assert [b.name for b in branches] == ["main", "feature"]
     assert sync.call_args.kwargs["node_id"] == NODE
-    assert sync.call_args.kwargs["org_id"] == ORG
+    # The public signature takes a str; the wire call takes a UUID. These
+    # endpoints typed org_id as a str until yertle-client 0.3.1, so this
+    # pins the conversion rather than leaving it to the type-checker alone.
+    assert sync.call_args.kwargs["org_id"] == UUID(ORG)
 
 
 @patch(_CREATE, return_value=_branch("feature"))
