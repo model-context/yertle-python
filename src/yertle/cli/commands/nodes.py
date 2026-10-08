@@ -1,7 +1,9 @@
 """`yertle nodes` — work with nodes."""
 
 import builtins
+import json
 from collections import defaultdict
+from pathlib import Path
 from typing import Annotated, Any
 
 import typer
@@ -11,6 +13,7 @@ from yertle_client.models import (
     HierarchyEntryResponse,
     NodeResponse,
     NodeTreeDocument,
+    PushStateResponse,
 )
 from yertle_client.types import Unset
 
@@ -22,6 +25,7 @@ from yertle.cli._context import (
     resolve_one_org,
     resolve_org,
 )
+from yertle.cli._diff import diff_states, render_diff
 from yertle.cli._errors import api_errors, die
 from yertle.cli._render import FORMAT_EPILOG, Column, Format, FormatOption, dump_json, render
 
@@ -545,3 +549,150 @@ def create_node(
     console.print(
         "[dim]  Unattached — `yertle nodes tree` lists it as a root, not under a parent.[/dim]"
     )
+
+
+def _load_document(path: Path) -> NodeTreeDocument:
+    """Parse a document file, refusing anything that is not one.
+
+    The base-commit check is the load-bearing one. `expected_head_commit` is
+    only obtainable by reading, so a document without it was assembled by
+    hand — and since push replaces the whole state, a hand-written partial
+    document deletes everything it forgot to mention. Refusing here is what
+    makes read-before-write a precondition rather than advice.
+    """
+    try:
+        raw = json.loads(path.read_text())
+    except OSError as exc:
+        die(f"Cannot read {path}: {exc}")
+    except json.JSONDecodeError as exc:
+        die(f"{path} is not valid JSON ({exc}).")
+
+    if not isinstance(raw, dict) or "state" not in raw:
+        die(
+            f"{path} does not look like a node document.\n"
+            f"  Produce one with `yertle nodes show <id> --format json > {path}`.",
+        )
+    if not raw.get("expected_head_commit"):
+        die(
+            f"{path} has no `expected_head_commit`, so it was not produced by a read.\n"
+            f"  Pushing it would replace the node's whole state with just this file.\n"
+            f"  Start from `yertle nodes show <id> --format json > {path}` and edit that.",
+        )
+    try:
+        return NodeTreeDocument.from_dict(raw)
+    except (KeyError, TypeError, ValueError) as exc:
+        die(f"{path} is not a valid node document: {exc}")
+
+
+@app.command("apply")
+def apply_node(
+    file: Annotated[
+        Path,
+        typer.Option("--file", "-f", help="Document from `nodes show --format json`."),
+    ],
+    message: Annotated[
+        str | None,
+        typer.Option("--message", "-m", help="Commit message. Falls back to the document's."),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Show the diff and exit without writing."),
+    ] = False,
+    allow_deletes: Annotated[
+        bool,
+        typer.Option("--allow-deletes", help="Permit changes that remove something."),
+    ] = False,
+) -> None:
+    """Write an edited node document back.
+
+    The round trip:
+
+        yertle nodes show <id> --format json > node.json
+        # ...edit node.json...
+        yertle nodes apply -f node.json -m "what changed"
+
+    Push replaces the node's entire state, so anything missing from the file
+    is deleted. The diff is printed every time, and a change that removes
+    anything needs --allow-deletes. The organization, node and branch come
+    from the document, so there is no --org here: a document knows where it
+    belongs.
+    """
+    document = _load_document(file)
+    org_id, node_id = document.status.org_id, document.status.node_id
+    branch = document.status.branch
+
+    with api_errors():
+        current = yertle.nodes.get(node_id, org_id=org_id, branch=branch)
+
+    console = Console()
+    console.print(
+        f"Applying to [bold]{current.state.node.title}[/bold] "
+        f"[dim]{node_id} · branch {branch}[/dim]"
+    )
+
+    # Drift is worth naming before the diff, because it changes what the
+    # diff means: it is then against a state nobody edited.
+    if current.expected_head_commit != document.expected_head_commit:
+        die(
+            f"The branch moved since this document was read.\n"
+            f"  document: {document.expected_head_commit}\n"
+            f"  current:  {current.expected_head_commit}\n"
+            f"  Re-read it with `yertle nodes show {node_id} --format json`, "
+            f"reapply the edit, and try again.",
+        )
+
+    diff = diff_states(current.state, document.state)
+    console.print()
+    render_diff(console, diff)
+    console.print()
+
+    if diff.is_empty and not dry_run:
+        console.print("[dim]Nothing to apply.[/dim]")
+        return
+    if dry_run:
+        console.print("[dim]Dry run — nothing written.[/dim]")
+        return
+    if diff.removals and not allow_deletes:
+        die(
+            f"This would remove {len(diff.removals)} thing(s), listed above.\n"
+            f"  Re-run with --allow-deletes if that is intended.",
+        )
+
+    commit_message = message or (
+        document.message if isinstance(document.message, str) and document.message.strip() else None
+    )
+    if not commit_message:
+        die("A commit message is required. Pass -m, or set `message` in the document.")
+
+    with api_errors():
+        result = yertle.nodes.push(document, message=commit_message)
+
+    _render_push_result(console, result)
+
+
+def _render_push_result(console: Console, result: PushStateResponse) -> None:
+    """Report what the push did, including the parts that are easy to miss."""
+    if result.unchanged:
+        console.print("[green]✓[/green] Already up to date — no commit created.")
+        return
+
+    console.print(f"[green]✓[/green] Committed [bold]{result.commit_id}[/bold]")
+    console.print(
+        f"[dim]  {result.objects_created} object(s) created, {result.objects_reused} reused[/dim]"
+    )
+
+    mappings = result.connection_id_mappings
+    if mappings is not None and not isinstance(mappings, Unset):
+        for temporary, real in (mappings.to_dict() or {}).items():
+            console.print(f"[dim]  connection {temporary} → {real}[/dim]")
+
+    # The only signal that a typo was dropped: push stores what it knows and
+    # ignores the rest, so a misspelled field fails silently without this.
+    ignored = result.ignored_keys
+    if ignored and not isinstance(ignored, Unset):
+        console.print(f"\n[yellow]![/yellow] Ignored {len(ignored)} unknown key(s):")
+        for key in ignored:
+            console.print(f"    {key}")
+        console.print(
+            "[dim]  These were not stored. A misspelled field looks exactly like this.[/dim]"
+        )
