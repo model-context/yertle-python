@@ -25,6 +25,12 @@ from yertle_client.api.nodes import (
 from yertle_client.api.nodes import (
     get_complete_state_by_branch_orgs_org_id_nodes_node_id_tree_branch_complete_get as _complete,
 )
+from yertle_client.api.nodes import (
+    get_tree_document_orgs_org_id_nodes_node_id_tree_branch_get as _tree_document,
+)
+from yertle_client.api.nodes import (
+    push_node_state_orgs_org_id_nodes_node_id_tree_branch_push_put as _push,
+)
 from yertle_client.models import (
     CreateNodeRequest,
     CreateNodeRequestTagsType0,
@@ -33,12 +39,24 @@ from yertle_client.models import (
     NodeCompleteStateResponse,
     NodeListResponse,
     NodeResponse,
+    NodeTreeDocument,
+    PushStateRequest,
+    PushStateResponse,
 )
 from yertle_client.types import UNSET, Unset
 
 from yertle._client import client
 
-__all__ = ["ALL_ORGS", "DEFAULT_BRANCH", "create", "get", "list", "tree"]
+__all__ = [
+    "ALL_ORGS",
+    "DEFAULT_BRANCH",
+    "create",
+    "document",
+    "get",
+    "list",
+    "push",
+    "tree",
+]
 
 #: Sentinel for "every organization the caller belongs to" — the backend spells
 #: it this way too, as the literal path segment in `/orgs/all/nodes`.
@@ -216,4 +234,105 @@ def create(
     )
     if not isinstance(response, NodeResponse):
         raise RuntimeError(f"Unexpected response from nodes.create({title!r}): {response!r}")
+    return response
+
+
+def document(
+    node_id: str,
+    *,
+    org_id: str,
+    branch: str = DEFAULT_BRANCH,
+) -> NodeTreeDocument:
+    """Fetch a node's write document — the state at `branch`, plus its base commit.
+
+    This is the read half of read-edit-push. What comes back is valid input
+    to `push()` unmodified: `state` holds exactly the five sections push
+    stores, `expected_head_commit` is the branch head it was read at, and
+    `status` is read-only context that push ignores.
+
+    Prefer this over `get()` for anything that will write. `get()` returns
+    `/complete`, which is shaped for the canvas renderer — it mixes stored
+    state with derived views and render-time fields, so editing it and
+    sending it back is guesswork. The backend guarantees this document
+    round-trips; it does not guarantee that for `/complete`.
+
+    Fields prefixed `_` (`_title` on a child position, `_from_title` on a
+    connection) are annotations: they exist so a document can be read and
+    reviewed without resolving every id by hand, and push drops them.
+    """
+    if org_id == ALL_ORGS:
+        raise ValueError("nodes.document() needs a specific org_id, not 'all'.")
+    response = _tree_document.sync(
+        client=client(),
+        org_id=UUID(org_id),
+        node_id=node_id,
+        branch=branch,
+    )
+    if not isinstance(response, NodeTreeDocument):
+        raise RuntimeError(f"Unexpected response from nodes.document({node_id!r}): {response!r}")
+    return response
+
+
+def push(
+    document: NodeTreeDocument,
+    *,
+    message: str,
+    org_id: str | None = None,
+    node_id: str | None = None,
+    branch: str | None = None,
+    expected_head_commit: str | None = None,
+) -> PushStateResponse:
+    """Write a document back, returning what the commit did.
+
+    **This is a full replace.** Push stores exactly the five sections in
+    `document.state`, and an omitted section is stored as *empty* — a
+    document carrying only `node` deletes every tag, directory, child and
+    connection. That is why this takes a whole document rather than a patch,
+    and why the document should come from `document()` rather than be
+    assembled by hand.
+
+    Where it is going is read from `document.status` unless overridden. A
+    document identifies its own node, so pushing document A at node B is a
+    mistake worth making awkward rather than convenient.
+
+    `expected_head_commit` likewise comes from the document. It is the
+    concurrency check: if the branch moved since the read, the backend
+    answers 409 rather than overwriting. Override it only to deliberately
+    rebase onto a head you have not read.
+
+    The response is worth looking at rather than discarding:
+
+    - `unchanged` is True when the push matched the branch head exactly. No
+      commit is created, and `commit_id == previous_commit`.
+    - `ignored_keys` lists every unknown non-`_` key that push did not
+      store, as collapsed paths like `state.connections[].lable`. Nothing is
+      rejected, so this is the only signal that a typo was silently dropped.
+    - `connection_id_mappings` maps any `temp-` connection id to the real
+      one the backend assigned.
+    """
+    # `status` types these as required, but a hand-assembled document can
+    # still carry empty strings, so the emptiness check stays.
+    status = document.status
+    target_org = org_id or status.org_id
+    target_node = node_id or status.node_id
+    target_branch = branch or status.branch or DEFAULT_BRANCH
+    if not target_org or not target_node:
+        raise ValueError(
+            "nodes.push() could not tell which node to write to. "
+            "Pass org_id and node_id, or use a document from nodes.document().",
+        )
+
+    response = _push.sync(
+        client=client(),
+        org_id=UUID(target_org),
+        node_id=target_node,
+        branch=target_branch,
+        body=PushStateRequest(
+            message=message,
+            state=document.state,
+            expected_head_commit=expected_head_commit or document.expected_head_commit,
+        ),
+    )
+    if not isinstance(response, PushStateResponse):
+        raise RuntimeError(f"Unexpected response from nodes.push({target_node!r}): {response!r}")
     return response
