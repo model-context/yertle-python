@@ -9,8 +9,8 @@ from rich.console import Console
 from rich.tree import Tree
 from yertle_client.models import (
     HierarchyEntryResponse,
-    NodeCompleteStateResponse,
     NodeResponse,
+    NodeTreeDocument,
 )
 from yertle_client.types import Unset
 
@@ -201,25 +201,6 @@ def tree_nodes(org: OrgOption = None, fmt: FormatOption = Format.TABLE) -> None:
     Console().print(_build_tree(entries, f"Hierarchy in {scope} ({len(entries)})"))
 
 
-def _tag_value(raw: object) -> str:
-    """Render one tag value.
-
-    The wire shape is `{"Team": {"value": "Backend"}}` — a nested object, not
-    a flat string map, which the architecture doc's example does not show.
-    Unwrap it, but fall back to the raw value so an unexpected shape prints
-    something rather than raising inside a display command.
-    """
-    if isinstance(raw, dict):
-        inner = raw.get("value")
-        return str(inner) if inner is not None else ""
-    return str(raw)
-
-
-def _items(value: object) -> builtins.list[Any]:
-    """Coerce an optional wire list into a list. `Unset` and `None` mean empty."""
-    return value if isinstance(value, builtins.list) else []
-
-
 def _section(console: Console, title: str, count: int | None = None) -> None:
     console.print(f"\n[bold]{title if count is None else f'{title} ({count})'}[/bold]")
 
@@ -229,40 +210,35 @@ def _labelled(label: object) -> str:
     return f"  [dim]{label}[/dim]" if label else ""
 
 
-def _titles_by_id(state: NodeCompleteStateResponse) -> dict[str, str]:
-    """Map child id → title, for resolving the ids inside `connections`.
-
-    Internal connections reference `from_child_id` / `to_child_id`, so without
-    this the section renders as a wall of uuids.
-    """
-    titles: dict[str, str] = {}
-    for child in _items(state.child_nodes):
-        entry = child.to_dict()
-        node_id, title = entry.get("id"), entry.get("title")
-        if isinstance(node_id, str) and isinstance(title, str):
-            titles[node_id] = title
-    return titles
+def _listed(value: object) -> builtins.list[Any]:
+    """Coerce an optional wire list into a list. `Unset` and `None` mean empty."""
+    return value if isinstance(value, builtins.list) else []
 
 
-def _render_header(console: Console, state: NodeCompleteStateResponse, branch: str) -> None:
-    node = state.node.to_dict()
-    console.print(f"[bold]{node.get('title', '(untitled)')}[/bold]")
-    console.print(f"[dim]{node.get('id', '')} · branch {branch}[/dim]")
-    if description := (node.get("description") or "").strip():
+def _render_header(console: Console, doc: NodeTreeDocument) -> None:
+    node = doc.state.node
+    console.print(f"[bold]{node.title or '(untitled)'}[/bold]")
+    console.print(f"[dim]{doc.status.node_id} · branch {doc.status.branch}[/dim]")
+    if description := (node.description or "").strip():
         console.print(f"\n{description}")
 
 
-def _render_tags(console: Console, state: NodeCompleteStateResponse) -> None:
-    tags = state.tags.to_dict() if not isinstance(state.tags, Unset) else {}
-    if not tags:
+def _render_tags(console: Console, doc: NodeTreeDocument) -> None:
+    tags = doc.state.tags
+    entries = tags.to_dict() if not isinstance(tags, Unset) else {}
+    if not entries:
         return
     _section(console, "Tags")
-    for key in sorted(tags):
-        console.print(f"  {key}  [cyan]{_tag_value(tags[key])}[/cyan]")
+    for key in sorted(entries):
+        entry = entries[key]
+        # A tag is {"value": ..., "link": ...}; `link` is usually absent.
+        value = entry.get("value", "") if isinstance(entry, dict) else entry
+        link = entry.get("link") if isinstance(entry, dict) else None
+        console.print(f"  {key}  [cyan]{value}[/cyan]{_labelled(link)}")
 
 
-def _render_directories(console: Console, state: NodeCompleteStateResponse) -> None:
-    directories = _items(state.directories)
+def _render_directories(console: Console, doc: NodeTreeDocument) -> None:
+    directories = _listed(doc.state.directories)
     if not directories:
         return
     _section(console, "Directories")
@@ -270,63 +246,77 @@ def _render_directories(console: Console, state: NodeCompleteStateResponse) -> N
         console.print(f"  {path}")
 
 
-def _render_related(console: Console, state: NodeCompleteStateResponse) -> None:
-    for label, related in (("Parents", state.parent_nodes), ("Children", state.child_nodes)):
-        items = _items(related)
-        if not items:
-            continue
-        _section(console, label, len(items))
-        for item in items:
-            entry = item.to_dict()
+def _render_related(console: Console, doc: NodeTreeDocument) -> None:
+    """Parents, then children.
+
+    The two come from different halves of the document. Parents are
+    read-only context in `status` — the containment edge lives in the
+    *parent's* canvas, not here. Children are `state.visual_properties`,
+    because containing a node is a thing this node stores and can change.
+
+    Parents are always read from main, whatever branch was asked for, since
+    that is where other nodes' canvases live.
+    """
+    parents = _listed(doc.status.parents)
+    if parents:
+        _section(console, "Parents", len(parents))
+        for parent in parents:
+            entry = parent.to_dict()
             console.print(f"  {entry.get('title', '')}  [dim]{entry.get('id', '')}[/dim]")
 
+    children = _listed(doc.state.visual_properties)
+    if children:
+        _section(console, "Children", len(children))
+        for child in children:
+            title = child.field_title if not isinstance(child.field_title, Unset) else None
+            console.print(f"  {title or ''}  [dim]{child.child_node_id}[/dim]")
 
-def _render_connections(console: Console, state: NodeCompleteStateResponse) -> None:
-    connections = _items(state.connections)
+
+def _render_connections(console: Console, doc: NodeTreeDocument) -> None:
+    """Connections between this node's children.
+
+    The document carries `_from_title` / `_to_title` annotations, so unlike
+    the `/complete` version this needs no id-to-title lookup of its own.
+    """
+    connections = _listed(doc.state.connections)
     if not connections:
         return
-    titles = _titles_by_id(state)
     _section(console, "Connections between children", len(connections))
     for connection in connections:
-        edge = connection.to_dict()
-        source = titles.get(str(edge.get("from_child_id")), "?")
-        target = titles.get(str(edge.get("to_child_id")), "?")
-        console.print(f"  {source} → {target}{_labelled(edge.get('label'))}")
+        source = connection.field_from_title or connection.from_child_id
+        target = connection.field_to_title or connection.to_child_id
+        console.print(f"  {source} → {target}{_labelled(connection.label)}")
 
 
-def _render_boundary(console: Console, state: NodeCompleteStateResponse) -> None:
-    """Connections crossing this node's own boundary."""
-    for heading, related in (
-        ("Ingress", state.ingress_connections),
-        ("Egress", state.egress_connections),
-    ):
-        items = _items(related)
+def _render_boundary(console: Console, doc: NodeTreeDocument) -> None:
+    """Connections crossing this node's own boundary, from `status`."""
+    for heading, related in (("Ingress", doc.status.ingress), ("Egress", doc.status.egress)):
+        items = _listed(related)
         if not items:
             continue
         _section(console, heading, len(items))
         for item in items:
             edge = item.to_dict()
-            # These arrive denormalised with the far end's title attached, so
-            # unlike internal connections they need no id lookup.
+            # Denormalised with the far end attached, so no lookup is needed.
             other = (edge.get("connected_node") or {}).get("title", "?")
             line = f"{other} → this" if heading == "Ingress" else f"this → {other}"
             console.print(f"  {line}{_labelled(edge.get('label'))}")
 
 
-def _render_show(state: NodeCompleteStateResponse, branch: str) -> None:
+def _render_show(doc: NodeTreeDocument) -> None:
     """Print a node's detail view.
 
     Empty sections are omitted rather than printed as headings with nothing
-    under them — a node with no connections should read as a short page, not a
-    form full of blanks.
+    under them — a node with no connections should read as a short page, not
+    a form full of blanks.
     """
     console = Console()
-    _render_header(console, state, branch)
-    _render_tags(console, state)
-    _render_directories(console, state)
-    _render_related(console, state)
-    _render_connections(console, state)
-    _render_boundary(console, state)
+    _render_header(console, doc)
+    _render_tags(console, doc)
+    _render_directories(console, doc)
+    _render_related(console, doc)
+    _render_connections(console, doc)
+    _render_boundary(console, doc)
 
 
 @app.command("show")
@@ -342,12 +332,12 @@ def show_node(
     org_id = resolve_one_org(org, command="nodes show")
 
     with api_errors():
-        state = yertle.nodes.get(node_id, org_id=org_id, branch=branch)
+        doc = yertle.nodes.get(node_id, org_id=org_id, branch=branch)
 
     if fmt is Format.JSON:
-        dump_json(state)
+        dump_json(doc)
         return
-    _render_show(state, branch)
+    _render_show(doc)
 
 
 def _tag_filters(pairs: builtins.list[str]) -> dict[str, str]:

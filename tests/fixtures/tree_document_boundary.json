@@ -1,0 +1,85 @@
+{
+  "expected_head_commit": "67d4e3d0-add7-4730-9657-231a3dedf8e7",
+  "state": {
+    "node": {
+      "title": "CloudFront",
+      "description": "",
+      "metadata": {
+        "optimized": true,
+        "timestamp": "2026-04-24T20:49:45.304247",
+        "fetched_at": "backend-1d311705-5b5a-4d08-9fb3-ea74dbb2b1fb",
+        "node_count": 0,
+        "egress_count": 1,
+        "parent_count": 1,
+        "visual_count": 0,
+        "ingress_count": 1,
+        "connection_count": 0,
+        "modernized_format": true
+      }
+    },
+    "tags": {
+      "ARN": {
+        "value": "arn:aws:cloudfront::983601044828:distribution/EOI3LIXNA853O",
+        "link": "https://983601044828-zfbpm2s5.us-east-1.console.aws.amazon.com/cloudfront/v4/home?region=us-east-1#/distributions/EOI3LIXNA853O"
+      },
+      "GitHub": {
+        "value": "yertle",
+        "link": "https://github.com/albertcmiller1/yertle"
+      },
+      "IaC": {
+        "value": "cloudfront.yaml",
+        "link": "https://github.com/albertcmiller1/yertle/blob/main/deployment/infrastructure/frontend/cloudfront.yml"
+      }
+    },
+    "directories": [],
+    "visual_properties": [],
+    "connections": []
+  },
+  "status": {
+    "node_id": "393aabe4-ac21-41f9-b325-84d1dce2a835",
+    "org_id": "f586beac-7039-4f0c-9681-fd36293f071f",
+    "branch": "main",
+    "counts": {
+      "children": 0,
+      "connections": 0,
+      "parents": 1,
+      "ingress": 1,
+      "egress": 1
+    },
+    "created_at": "2026-04-15T01:03:21.160113+00:00",
+    "parents": [
+      {
+        "id": "09b27471-7aa2-4ff2-8f4e-ca62941f06df",
+        "title": "Yertle Webapp",
+        "description": ""
+      }
+    ],
+    "ingress": [
+      {
+        "connection_id": "a37c9a84-a9fb-434b-b53c-6bd7cddaebbe",
+        "from_node_id": "e4222c72-7fd0-4d65-ad2e-fabbd2c30b7a",
+        "to_node_id": "393aabe4-ac21-41f9-b325-84d1dce2a835",
+        "label": null,
+        "connection_type": "default",
+        "connected_node": {
+          "title": "User",
+          "description": ""
+        }
+      }
+    ],
+    "egress": [
+      {
+        "connection_id": "04768b94-8875-42f3-9850-8caa785f5a85",
+        "from_node_id": "393aabe4-ac21-41f9-b325-84d1dce2a835",
+        "to_node_id": "d20bb5a5-446b-49dc-bc23-6ec2ee0f8f10",
+        "label": null,
+        "connection_type": "default",
+        "connected_node": {
+          "title": "S3 Bucket",
+          "description": ""
+        }
+      }
+    ]
+  },
+  "message": ""
+}

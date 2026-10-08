@@ -1,0 +1,237 @@
+{
+  "expected_head_commit": "d7e408a6-0bd3-4bad-b14b-ac6a40b72084",
+  "state": {
+    "node": {
+      "title": "Yertle Webapp",
+      "description": "",
+      "metadata": {}
+    },
+    "tags": {
+      "Team": {
+        "value": "Backend"
+      }
+    },
+    "directories": [
+      "/projects/albert"
+    ],
+    "visual_properties": [
+      {
+        "child_node_id": "0cc209f2-69a4-45ab-905d-37f66bbd71c2",
+        "position_x": -271.265625,
+        "position_y": -2.44140625,
+        "z_index": 0,
+        "width": 200.0,
+        "height": 100.0,
+        "rotation": 0.0,
+        "transparency": 0.2,
+        "show_border": true,
+        "title_position": "center",
+        "show_preview": false,
+        "_title": "API Gateway",
+        "_snapshot_commit_id": "8d4e05a7-8726-4826-9f2d-85af79756971"
+      },
+      {
+        "child_node_id": "393aabe4-ac21-41f9-b325-84d1dce2a835",
+        "position_x": -271.95703125,
+        "position_y": 175.46484375,
+        "z_index": 0,
+        "width": 200.0,
+        "height": 100.0,
+        "rotation": 0.0,
+        "transparency": 0.2,
+        "show_border": true,
+        "title_position": "center",
+        "show_preview": false,
+        "_title": "CloudFront",
+        "_snapshot_commit_id": "67d4e3d0-add7-4730-9657-231a3dedf8e7"
+      },
+      {
+        "child_node_id": "0b8cb5f2-e80c-4a51-aa0a-cb5608d91d5a",
+        "position_x": -271.64453125,
+        "position_y": -165.234375,
+        "z_index": 0,
+        "width": 200.0,
+        "height": 100.0,
+        "rotation": 0.0,
+        "transparency": 0.2,
+        "show_border": true,
+        "title_position": "center",
+        "show_preview": false,
+        "_title": "Cognito",
+        "_snapshot_commit_id": "a0aecfed-7847-4460-9ccc-7a10de056dda"
+      },
+      {
+        "child_node_id": "79606437-a91c-40af-befb-e226005ad836",
+        "position_x": 14.75,
+        "position_y": -2.61328125,
+        "z_index": 0,
+        "width": 200.0,
+        "height": 100.0,
+        "rotation": 0.0,
+        "transparency": 0.2,
+        "show_border": true,
+        "title_position": "center",
+        "show_preview": false,
+        "_title": "Lambda",
+        "_snapshot_commit_id": "f4dadfac-d019-434e-a250-0be66c057c0d"
+      },
+      {
+        "child_node_id": "2814cea4-8558-42d3-8e17-088ac0b9eaf1",
+        "position_x": -2.63671875,
+        "position_y": -232.71875,
+        "z_index": 0,
+        "width": 200.0,
+        "height": 100.0,
+        "rotation": 0.0,
+        "transparency": 0.2,
+        "show_border": true,
+        "title_position": "center",
+        "show_preview": false,
+        "_title": "New Node",
+        "_snapshot_commit_id": "25cd0b0d-66af-4af5-858c-140ab62433ef"
+      },
+      {
+        "child_node_id": "d20bb5a5-446b-49dc-bc23-6ec2ee0f8f10",
+        "position_x": 16.8359375,
+        "position_y": 176.0390625,
+        "z_index": 0,
+        "width": 200.0,
+        "height": 100.0,
+        "rotation": 0.0,
+        "transparency": 0.2,
+        "show_border": true,
+        "title_position": "center",
+        "show_preview": false,
+        "_title": "S3 Bucket",
+        "_snapshot_commit_id": "6f91b1ff-a5fd-4825-be7d-5ce6f9e8780e"
+      },
+      {
+        "child_node_id": "ac1e9e01-9da3-4a51-a99b-f0cf58170bfa",
+        "position_x": 297.35546875,
+        "position_y": -2.13671875,
+        "z_index": 0,
+        "width": 200.0,
+        "height": 100.0,
+        "rotation": 0.0,
+        "transparency": 0.2,
+        "show_border": true,
+        "title_position": "center",
+        "show_preview": false,
+        "_title": "Supabase",
+        "_snapshot_commit_id": "7538bdf4-9fe8-42a1-b69c-4bacd373c59a"
+      },
+      {
+        "child_node_id": "e4222c72-7fd0-4d65-ad2e-fabbd2c30b7a",
+        "position_x": -577.7890625,
+        "position_y": -1.3828125,
+        "z_index": 0,
+        "width": 200.0,
+        "height": 100.0,
+        "rotation": 0.0,
+        "transparency": 0.2,
+        "show_border": true,
+        "title_position": "center",
+        "show_preview": false,
+        "_title": "User",
+        "_snapshot_commit_id": "ac66a4bb-e57a-4da7-94b6-553052a6648f"
+      }
+    ],
+    "connections": [
+      {
+        "id": "4d79f7b3-eb28-4e02-b694-31e3465a2d5c",
+        "from_child_id": "0cc209f2-69a4-45ab-905d-37f66bbd71c2",
+        "to_child_id": "79606437-a91c-40af-befb-e226005ad836",
+        "from_edge": "right",
+        "to_edge": "left",
+        "style": {},
+        "type": "default",
+        "metadata": {},
+        "_from_title": "API Gateway",
+        "_to_title": "Lambda"
+      },
+      {
+        "id": "04768b94-8875-42f3-9850-8caa785f5a85",
+        "from_child_id": "393aabe4-ac21-41f9-b325-84d1dce2a835",
+        "to_child_id": "d20bb5a5-446b-49dc-bc23-6ec2ee0f8f10",
+        "from_edge": "right",
+        "to_edge": "left",
+        "style": {},
+        "type": "default",
+        "metadata": {},
+        "_from_title": "CloudFront",
+        "_to_title": "S3 Bucket"
+      },
+      {
+        "id": "3440f064-a09b-48b4-a561-cc06b91b363e",
+        "from_child_id": "79606437-a91c-40af-befb-e226005ad836",
+        "to_child_id": "ac1e9e01-9da3-4a51-a99b-f0cf58170bfa",
+        "from_edge": "right",
+        "to_edge": "left",
+        "style": {},
+        "type": "default",
+        "metadata": {},
+        "_from_title": "Lambda",
+        "_to_title": "Supabase"
+      },
+      {
+        "id": "638f13ef-5442-405f-badc-6d63111996bb",
+        "from_child_id": "e4222c72-7fd0-4d65-ad2e-fabbd2c30b7a",
+        "to_child_id": "0cc209f2-69a4-45ab-905d-37f66bbd71c2",
+        "from_edge": "right",
+        "to_edge": "left",
+        "style": {},
+        "type": "default",
+        "metadata": {},
+        "_from_title": "User",
+        "_to_title": "API Gateway"
+      },
+      {
+        "id": "a37c9a84-a9fb-434b-b53c-6bd7cddaebbe",
+        "from_child_id": "e4222c72-7fd0-4d65-ad2e-fabbd2c30b7a",
+        "to_child_id": "393aabe4-ac21-41f9-b325-84d1dce2a835",
+        "from_edge": "right",
+        "to_edge": "left",
+        "style": {},
+        "type": "default",
+        "metadata": {},
+        "_from_title": "User",
+        "_to_title": "CloudFront"
+      },
+      {
+        "id": "fd168584-6706-4aac-9520-0e0e20a3265a",
+        "from_child_id": "e4222c72-7fd0-4d65-ad2e-fabbd2c30b7a",
+        "to_child_id": "0b8cb5f2-e80c-4a51-aa0a-cb5608d91d5a",
+        "from_edge": "right",
+        "to_edge": "left",
+        "style": {},
+        "type": "default",
+        "metadata": {},
+        "_from_title": "User",
+        "_to_title": "Cognito"
+      }
+    ]
+  },
+  "status": {
+    "node_id": "09b27471-7aa2-4ff2-8f4e-ca62941f06df",
+    "org_id": "f586beac-7039-4f0c-9681-fd36293f071f",
+    "branch": "main",
+    "counts": {
+      "children": 8,
+      "connections": 6,
+      "parents": 1,
+      "ingress": 0,
+      "egress": 0
+    },
+    "created_at": "2026-04-15T00:58:22.292611+00:00",
+    "parents": [
+      {
+        "id": "bbbff903-64a8-448e-a6c6-d3dfcfe4641f",
+        "title": "Root",
+        "description": ""
+      }
+    ],
+    "ingress": [],
+    "egress": []
+  },
+  "message": ""
+}
