@@ -23,9 +23,6 @@ from yertle_client.api.nodes import (
     list_nodes_orgs_org_id_nodes_get,
 )
 from yertle_client.api.nodes import (
-    get_complete_state_by_branch_orgs_org_id_nodes_node_id_tree_branch_complete_get as _complete,
-)
-from yertle_client.api.nodes import (
     get_tree_document_orgs_org_id_nodes_node_id_tree_branch_get as _tree_document,
 )
 from yertle_client.api.nodes import (
@@ -36,7 +33,6 @@ from yertle_client.models import (
     CreateNodeRequestTagsType0,
     HierarchyEntryResponse,
     HierarchyResponse,
-    NodeCompleteStateResponse,
     NodeListResponse,
     NodeResponse,
     NodeTreeDocument,
@@ -51,7 +47,6 @@ __all__ = [
     "ALL_ORGS",
     "DEFAULT_BRANCH",
     "create",
-    "document",
     "get",
     "list",
     "push",
@@ -147,38 +142,6 @@ def tree(org_id: str = ALL_ORGS) -> builtins.list[HierarchyEntryResponse]:
     return response.entries
 
 
-def get(
-    node_id: str,
-    *,
-    org_id: str,
-    branch: str = DEFAULT_BRANCH,
-) -> NodeCompleteStateResponse:
-    """Fetch a node's complete state on `branch`.
-
-    One request returns the node, its tags and directories, its parents and
-    children, the connections between those children, and the connections
-    crossing its own boundary. The Go CLI used `/canvas?include_related=full`
-    instead, but only because it needed visual positions for its ASCII
-    diagram; `/complete` is the smaller answer for a detail view.
-
-    `org_id` is required and cannot be `ALL_ORGS` — the endpoint is scoped to
-    one organization. Deciding *which* org a bare node id belongs to is a
-    front-end concern, so the CLI resolves it and passes it explicitly rather
-    than this module carrying an ambient default.
-    """
-    if org_id == ALL_ORGS:
-        raise ValueError("nodes.get() needs a specific org_id, not 'all'.")
-    response = _complete.sync(
-        client=client(),
-        org_id=UUID(org_id),
-        node_id=node_id,
-        branch=branch,
-    )
-    if not isinstance(response, NodeCompleteStateResponse):
-        raise RuntimeError(f"Unexpected response from nodes.get({node_id!r}): {response!r}")
-    return response
-
-
 def create(
     title: str,
     *,
@@ -237,7 +200,7 @@ def create(
     return response
 
 
-def document(
+def get(
     node_id: str,
     *,
     org_id: str,
@@ -250,18 +213,20 @@ def document(
     stores, `expected_head_commit` is the branch head it was read at, and
     `status` is read-only context that push ignores.
 
-    Prefer this over `get()` for anything that will write. `get()` returns
-    `/complete`, which is shaped for the canvas renderer — it mixes stored
-    state with derived views and render-time fields, so editing it and
-    sending it back is guesswork. The backend guarantees this document
-    round-trips; it does not guarantee that for `/complete`.
+    Until 2026-10-08 this returned `/complete` instead, which is shaped for
+    the canvas renderer: it mixes stored state with derived views and
+    render-time fields, so editing it and sending it back was guesswork. The
+    backend guarantees *this* document round-trips and guarantees nothing of
+    the sort for `/complete`, which is itself on the way out (yertle#383).
+    Nothing here reads `/complete` any more; callers that want the render
+    view can reach the wire layer directly.
 
     Fields prefixed `_` (`_title` on a child position, `_from_title` on a
     connection) are annotations: they exist so a document can be read and
     reviewed without resolving every id by hand, and push drops them.
     """
     if org_id == ALL_ORGS:
-        raise ValueError("nodes.document() needs a specific org_id, not 'all'.")
+        raise ValueError("nodes.get() needs a specific org_id, not 'all'.")
     response = _tree_document.sync(
         client=client(),
         org_id=UUID(org_id),
@@ -269,7 +234,7 @@ def document(
         branch=branch,
     )
     if not isinstance(response, NodeTreeDocument):
-        raise RuntimeError(f"Unexpected response from nodes.document({node_id!r}): {response!r}")
+        raise RuntimeError(f"Unexpected response from nodes.get({node_id!r}): {response!r}")
     return response
 
 

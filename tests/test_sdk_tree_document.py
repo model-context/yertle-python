@@ -1,4 +1,4 @@
-"""Tests for `yertle.nodes.document` and `yertle.nodes.push`.
+"""Tests for `yertle.nodes.get` and `yertle.nodes.push`.
 
 The read-edit-push half of the SDK. Two things are worth pinning here and
 neither is about happy-path plumbing:
@@ -6,7 +6,7 @@ neither is about happy-path plumbing:
 - **Where a push goes** is derived from the document, not from the caller.
   Pushing document A at node B should be awkward, because push is a full
   replace and getting it wrong destroys the target's state.
-- **The real payload parses.** `tree_document.json` is captured from prod,
+- **The real payload parses.** `tree_document_rich.json` is captured from prod,
   not written from memory — including a `node.metadata` polluted before
   yertle#377, which is what real nodes still look like.
 """
@@ -22,13 +22,13 @@ from yertle_client.types import Unset
 
 import yertle
 
-ORG = "ed259eba-2e76-404f-a775-b17804216311"
-NODE = "d5322260-1933-4d31-ab8c-6603ca707e8a"
+ORG = "f586beac-7039-4f0c-9681-fd36293f071f"
+NODE = "09b27471-7aa2-4ff2-8f4e-ca62941f06df"
 
 _GET = "yertle.nodes._tree_document.sync"
 _PUSH = "yertle.nodes._push.sync"
 
-FIXTURE = Path(__file__).parent / "fixtures" / "tree_document.json"
+FIXTURE = Path(__file__).parent / "fixtures" / "tree_document_rich.json"
 
 
 def _document() -> NodeTreeDocument:
@@ -59,9 +59,9 @@ def test_the_captured_document_parses() -> None:
     """A fixture that does not match the wire is worse than no fixture."""
     doc = _document()
     assert doc.expected_head_commit
-    assert doc.state.node.title == "Root"
-    assert len(_children(doc)) == 4
-    assert doc.status.counts.children == 4
+    assert doc.state.node.title == "Yertle Webapp"
+    assert len(_children(doc)) == 8
+    assert doc.status.counts.children == 8
 
 
 def test_annotations_are_typed_fields_not_extras() -> None:
@@ -73,24 +73,24 @@ def test_annotations_are_typed_fields_not_extras() -> None:
 
 @patch(_GET, return_value=_document())
 @patch("yertle._client.get_client", return_value=object())
-def test_document_passes_the_org_as_a_uuid(_client, sync) -> None:
-    yertle.nodes.document(NODE, org_id=ORG)
+def test_get_passes_the_org_as_a_uuid(_client, sync) -> None:
+    yertle.nodes.get(NODE, org_id=ORG)
     assert sync.call_args.kwargs["org_id"] == UUID(ORG)
     assert sync.call_args.kwargs["node_id"] == NODE
     assert sync.call_args.kwargs["branch"] == "main"
 
 
 @patch("yertle._client.get_client", return_value=object())
-def test_document_rejects_all_orgs(_client) -> None:
+def test_get_rejects_all_orgs(_client) -> None:
     with pytest.raises(ValueError, match="not 'all'"):
-        yertle.nodes.document(NODE, org_id=yertle.nodes.ALL_ORGS)
+        yertle.nodes.get(NODE, org_id=yertle.nodes.ALL_ORGS)
 
 
 @patch(_GET, return_value=None)
 @patch("yertle._client.get_client", return_value=object())
-def test_document_raises_on_an_unexpected_response(_client, _sync) -> None:
+def test_get_raises_on_an_unexpected_response(_client, _sync) -> None:
     with pytest.raises(RuntimeError, match="Unexpected response"):
-        yertle.nodes.document(NODE, org_id=ORG)
+        yertle.nodes.get(NODE, org_id=ORG)
 
 
 @patch(_PUSH, return_value=_pushed())
