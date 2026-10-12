@@ -1,14 +1,17 @@
-"""Tests for `yertle about`.
+"""Tests for `yertle about`, and for the README's command list.
 
-The important one here is `test_about_documents_every_command`. `about` is
-hand-written prose describing a surface that keeps moving, which is exactly the
-shape of thing that goes quietly stale — the Go CLI's own `about` text still
-advertised `yertle canvas`, a command that never existed. Deriving the text
-from the app would lose the prose; asserting the text covers the app keeps
-both.
+Both are hand-written prose describing a surface that keeps moving, which is
+exactly the shape of thing that goes quietly stale. The Go CLI's own `about`
+text still advertised `yertle canvas`, a command that never existed; the
+README went a full release cycle without `nodes create`, `nodes apply` or any
+of `branches`, which is what prompted the second guard here.
+
+Deriving either from the app would lose the prose. Asserting the prose covers
+the app keeps both.
 """
 
 import re
+from pathlib import Path
 
 from typer.testing import CliRunner
 
@@ -66,3 +69,21 @@ def test_about_does_not_leak_rich_markup() -> None:
     result = runner.invoke(app, ["about"])
     assert "[bold]" not in result.output
     assert "[/bold]" not in result.output
+
+
+README = Path(__file__).parent.parent.parent / "README.md"
+
+
+def test_readme_lists_every_command() -> None:
+    """The README enumerates the commands, so the list has to be complete.
+
+    It went stale silently between 0.3.1 and 0.4.0 — three new commands and a
+    whole noun group missing — because nothing checked. A reader installing
+    from PyPI sees this list before anything else.
+    """
+    text = README.read_text()
+    undocumented = sorted(name for name in _registered_commands() if f"`{name}`" not in text)
+    assert not undocumented, (
+        f"README.md does not mention: {undocumented}. "
+        f"Add them to the command table under the install instructions."
+    )
