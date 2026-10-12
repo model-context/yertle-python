@@ -79,6 +79,20 @@ services connect, and where things live.
   yertle nodes create "<title>"       Create a node
   yertle nodes create "<title>" --tag team=backend --dir /services
 
+  yertle nodes show <id> --format json > node.json
+      ...edit node.json...
+  yertle nodes apply -f node.json -m "what changed"
+
+      Edit a node: its title, description, tags, directories, where its
+      children sit, and the connections between them. The document carries
+      the commit it was read at, so a concurrent change is caught rather
+      than overwritten.
+
+      A push replaces the node's whole state, so anything missing from the
+      file is deleted. apply prints the diff every time, refuses a change
+      that removes something unless you pass --allow-deletes, and --dry-run
+      shows the diff without writing.
+
   A new node is created [bold]unattached[/bold]: it belongs to the organization but
   sits under no parent, so nodes tree lists it at the top level beside the
   org's root rather than inside the hierarchy. Attaching it to a parent is a
