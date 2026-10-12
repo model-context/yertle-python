@@ -12,9 +12,26 @@ The CLI is distributed on PyPI and installed with
 uv tool install yertle
 ```
 
-That puts `yertle` on your PATH: `about`, `version`, `login`, `orgs list`,
-`orgs show`, `orgs use`, `nodes list`, `nodes tree`, `nodes show`,
-`nodes search`, `auth status`.
+That puts `yertle` on your PATH:
+
+| | |
+|---|---|
+| Find your way around | `orgs list`, `orgs show`, `orgs use`, `nodes list`, `nodes tree` |
+| Inspect | `nodes show`, `nodes search`, `branches list` |
+| Change things | `nodes create`, `nodes apply`, `branches create`, `branches delete` |
+| Everything else | `about`, `version`, `login`, `auth status` |
+
+Editing a node is a read-edit-write round trip, like `git`:
+
+```bash
+yertle nodes show <id> --format json > node.json
+# ...edit node.json...
+yertle nodes apply -f node.json -m "what changed"
+```
+
+A push replaces the node's whole state, so `apply` prints a diff every time,
+refuses a change that removes anything unless you pass `--allow-deletes`, and
+will not accept a document that was not produced by a read.
 
 Two optional extras ship alongside it, neither needed for the CLI:
 
