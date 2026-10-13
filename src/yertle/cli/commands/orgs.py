@@ -3,6 +3,7 @@
 from typing import Annotated
 
 import typer
+from rich.console import Console
 from yertle_client.models import OrganizationResponse
 from yertle_client.types import Unset
 
@@ -171,3 +172,34 @@ def show_org(
             ("Root node", _optional(org.root_node_id)),
         ],
     )
+
+
+@app.command("create")
+def create_org(
+    name: Annotated[str, typer.Argument(help="Name for the new organization.")],
+    description: Annotated[
+        str | None,
+        typer.Option("--description", "-d", help="What this organization is for."),
+    ] = None,
+    fmt: FormatOption = Format.TABLE,
+) -> None:
+    """Create an organization.
+
+    You become its owner. The backend also creates a [bold]Root[/bold] node for it —
+    that is the node everything else hangs off, so its id is printed too.
+    """
+    with api_errors():
+        org = yertle.orgs.create(name, description=description)
+
+    if fmt is Format.JSON:
+        dump_json(org)
+        return
+
+    # The id leads, matching `nodes create`, so `$(... | head -1)` captures it.
+    typer.echo(str(org.id))
+    console = Console()
+    console.print(f"[green]✓[/green] Created [bold]{org.name}[/bold]")
+    root = org.root_node_id
+    if root and not isinstance(root, Unset):
+        console.print(f"[dim]  Root node {root} — attach nodes to this one.[/dim]")
+    console.print(f"[dim]  Use it by default: yertle orgs use {org.id}[/dim]")

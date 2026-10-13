@@ -91,12 +91,35 @@ def _child_label(vp: VisualProperty) -> str:
     return str(title or vp.child_node_id)
 
 
-def _edge_label(c: Connection) -> str:
+def _edge_label(c: Connection, titles: dict[str, str] | None = None) -> str:
+    """Name both ends of a connection, falling back through three sources.
+
+    The `_from_title` annotation first, then the titles of the children in
+    the same document, then the bare id. The middle step matters: a
+    connection you just *added* has no annotations — the server fills those
+    on the next read — so without it every newly drawn edge renders as
+    `405b7a31-… → d7ef3127-…`, which is unreadable in exactly the diff that
+    is supposed to let you check what you are about to write.
+    """
+    lookup = titles or {}
     source = c.field_from_title if not isinstance(c.field_from_title, Unset) else None
     target = c.field_to_title if not isinstance(c.field_to_title, Unset) else None
-    line = f"{source or c.from_child_id} → {target or c.to_child_id}"
+    source = source or lookup.get(c.from_child_id) or c.from_child_id
+    target = target or lookup.get(c.to_child_id) or c.to_child_id
     label = c.label if not isinstance(c.label, Unset) else None
+    line = f"{source} → {target}"
     return f"{line}  ({label})" if label else line
+
+
+def _child_titles(*states: NodeState) -> dict[str, str]:
+    """Child id → title, gathered from every state we have."""
+    titles: dict[str, str] = {}
+    for state in states:
+        for vp in _listed(state.visual_properties):
+            title = vp.field_title if not isinstance(vp.field_title, Unset) else None
+            if title:
+                titles[vp.child_node_id] = str(title)
+    return titles
 
 
 def _position(vp: VisualProperty) -> tuple[Any, ...]:
@@ -181,6 +204,7 @@ def diff_states(current: NodeState, desired: NodeState) -> StateDiff:
     anything stored, and reporting it would make every diff noisy with
     nothing the user can act on.
     """
+    titles = _child_titles(current, desired)
     return StateDiff(
         [
             *_diff_node(current, desired),
@@ -198,7 +222,7 @@ def diff_states(current: NodeState, desired: NodeState) -> StateDiff:
                 "Connections",
                 {c.id: c for c in _listed(current.connections)},
                 {c.id: c for c in _listed(desired.connections)},
-                label=_edge_label,
+                label=lambda c: _edge_label(c, titles),
                 compare=lambda c: (c.label, c.from_child_id, c.to_child_id),
             ),
         ]

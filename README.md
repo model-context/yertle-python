@@ -18,7 +18,7 @@ That puts `yertle` on your PATH:
 |---|---|
 | Find your way around | `orgs list`, `orgs show`, `orgs use`, `nodes list`, `nodes tree` |
 | Inspect | `nodes show`, `nodes search`, `branches list` |
-| Change things | `nodes create`, `nodes apply`, `branches create`, `branches delete` |
+| Change things | `orgs create`, `nodes create`, `nodes apply`, `branches create`, `branches delete` |
 | Everything else | `about`, `version`, `login`, `auth status` |
 
 Editing a node is a read-edit-write round trip, like `git`:
