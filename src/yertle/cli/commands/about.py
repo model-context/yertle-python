@@ -55,6 +55,13 @@ services connect, and where things live.
   by default. Commands that cannot (nodes show, nodes search) ask you to
   pick one.
 
+[bold]Starting from nothing[/bold]
+
+  yertle orgs create "<name>"         Create an organization; you own it
+
+  A new organization comes with a [bold]Root[/bold] node already in it. That is the
+  node everything else hangs off, and `orgs create` prints its id.
+
 [bold]Finding your way around[/bold]
 
   yertle orgs list                    Organizations you belong to

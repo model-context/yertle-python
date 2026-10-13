@@ -96,6 +96,27 @@ def test_connections_are_named_by_both_ends() -> None:
     assert diff.changes[0].kind is Kind.ADDED
 
 
+def test_a_new_connection_is_named_from_the_documents_children() -> None:
+    """A connection you just added carries no annotations yet.
+
+    The server fills `_from_title` on the next read, so without resolving
+    against the document's own children every newly drawn edge renders as
+    two uuids — in the diff that exists to let you check what you are about
+    to write.
+    """
+    children = [
+        VisualProperty(child_node_id="c1", position_x=0.0, position_y=0.0),
+        VisualProperty(child_node_id="c2", position_x=0.0, position_y=0.0),
+    ]
+    children[0].field_title, children[1].field_title = "API", "Database"
+    fresh = Connection(id="temp-1", from_child_id="c1", to_child_id="c2", label="reads from")
+    diff = diff_states(
+        _state(visual_properties=children),
+        _state(visual_properties=children, connections=[fresh]),
+    )
+    assert diff.changes[0].detail == "API → Database  (reads from)"
+
+
 def test_counts_cover_every_kind() -> None:
     diff = diff_states(
         _state(),

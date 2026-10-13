@@ -310,3 +310,46 @@ def test_orgs_group_listing_mentions_how_to_clear() -> None:
         "`yertle orgs` no longer mentions 'all'; check the first line of "
         "use_org's docstring, which Typer renders as the short help."
     )
+
+
+@patch("yertle.orgs.create_organization_orgs_post.sync")
+@patch("yertle._client.get_client", return_value=object())
+def test_orgs_create_prints_the_id_first_and_names_the_root(_get_client, sync) -> None:
+    """A new org arrives with a Root node, and that id is what you attach to.
+
+    The backend creates it as a side effect of `POST /orgs`, so it appears in
+    no request and would otherwise have to be discovered with a second call.
+    """
+    now = datetime.datetime(2026, 10, 12, tzinfo=datetime.UTC)
+    sync.return_value = OrganizationResponse(
+        id="11111111-2222-3333-4444-555555555555",
+        name="Acme",
+        public_id="acme-abc123",
+        created_at=now,
+        updated_at=now,
+        root_node_id="99999999-8888-7777-6666-555555555555",
+    )
+    result = runner.invoke(app, ["orgs", "create", "Acme"])
+    assert result.exit_code == 0, result.output
+    assert result.output.splitlines()[0] == "11111111-2222-3333-4444-555555555555"
+    text = _cells(result.output)
+    assert "Created Acme" in text
+    assert "Root node 99999999-8888-7777-6666-555555555555" in text
+
+
+@patch("yertle.orgs.create_organization_orgs_post.sync")
+@patch("yertle._client.get_client", return_value=object())
+def test_orgs_create_forwards_a_description(_get_client, sync) -> None:
+    sync.return_value = _fake_response().organizations[0]
+    result = runner.invoke(app, ["orgs", "create", "Acme", "--description", "For testing"])
+    assert result.exit_code == 0, result.output
+    assert sync.call_args.kwargs["body"].description == "For testing"
+
+
+@patch("yertle.orgs.create_organization_orgs_post.sync")
+@patch("yertle._client.get_client", return_value=object())
+def test_orgs_create_json_dumps_the_org(_get_client, sync) -> None:
+    sync.return_value = _fake_response().organizations[0]
+    result = runner.invoke(app, ["orgs", "create", "Acme", "--format", "json"])
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["name"] == "Acme"

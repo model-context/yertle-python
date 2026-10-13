@@ -16,14 +16,20 @@ from __future__ import annotations
 import builtins
 
 from yertle_client.api.organizations import (
+    create_organization_orgs_post,
     get_organization_orgs_org_id_get,
     list_organizations_orgs_get,
 )
-from yertle_client.models import OrganizationListResponse, OrganizationResponse
+from yertle_client.models import (
+    CreateOrganizationRequest,
+    OrganizationListResponse,
+    OrganizationResponse,
+)
+from yertle_client.types import UNSET
 
 from yertle._client import client
 
-__all__ = ["get", "list"]
+__all__ = ["create", "get", "list"]
 
 
 # `list` shadows the builtin inside this module — annotations reference
@@ -46,4 +52,28 @@ def get(org_id: str) -> OrganizationResponse:
     response = get_organization_orgs_org_id_get.sync(client=client(), org_id=org_id)
     if not isinstance(response, OrganizationResponse):
         raise RuntimeError(f"Unexpected response from orgs.get({org_id!r}): {response!r}")
+    return response
+
+
+def create(name: str, *, description: str | None = None) -> OrganizationResponse:
+    """Create an organization, returning it as the backend stored it.
+
+    The caller becomes its owner. Two side effects are worth knowing about,
+    because neither is visible in the request: the backend auto-creates a
+    **Root node** for the new org, and two persistent invite links (viewer
+    and editor). The root node is the one you attach everything else to, and
+    its id comes back as `root_node_id`.
+
+    `description` is sent only when given, so the backend's own default (an
+    empty string) applies otherwise.
+    """
+    response = create_organization_orgs_post.sync(
+        client=client(),
+        body=CreateOrganizationRequest(
+            name=name,
+            description=description if description is not None else UNSET,
+        ),
+    )
+    if not isinstance(response, OrganizationResponse):
+        raise RuntimeError(f"Unexpected response from orgs.create({name!r}): {response!r}")
     return response

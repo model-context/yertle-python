@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import pytest
 from yertle_client.models import OrganizationListResponse, OrganizationResponse
+from yertle_client.types import UNSET
 
 import yertle
 
@@ -81,3 +82,20 @@ def test_configure_bypasses_get_client(_get_client, _sync):
 
     c = yertle.client()
     assert c.token == "yrt_test"  # pyright: ignore[reportPrivateUsage]
+
+
+@patch("yertle.orgs.create_organization_orgs_post.sync")
+@patch("yertle._client.get_client", return_value=object())
+def test_orgs_create_omits_an_unset_description(_get_client, sync) -> None:
+    """The backend defaults it to ""; sending null would replace that default."""
+    sync.return_value = _fake_org("org-1", "Acme")
+    org = yertle.orgs.create("Acme")
+    assert org.name == "Acme"
+    assert sync.call_args.kwargs["body"].description is UNSET
+
+
+@patch("yertle.orgs.create_organization_orgs_post.sync", return_value=None)
+@patch("yertle._client.get_client", return_value=object())
+def test_orgs_create_raises_on_an_unexpected_response(_get_client, _sync) -> None:
+    with pytest.raises(RuntimeError, match="Unexpected response"):
+        yertle.orgs.create("Acme")
