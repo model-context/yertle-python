@@ -114,6 +114,16 @@ services connect, and where things live.
   yertle branches create <node-id> <name> Fork a branch from main
   yertle branches delete <node-id> <name> Delete a merged branch
 
+  yertle prs create <node-id> "<title>" --source <branch>
+                                          Open a pull request
+  yertle prs list <node-id>               Pull requests on a node
+  yertle prs show <node-id> <number>      One PR, and whether it can merge
+  yertle prs merge <node-id> <number>     Merge it
+  yertle prs close <node-id> <number>     Close it without merging
+
+  PR numbers are per-node and start at 1 for each, so a number only means
+  something alongside its node.
+
   `branches delete` does [bold]not[/bold] check whether a branch was merged — unlike
   git, it only refuses when the branch has open pull requests, which is what
   --force overrides. Deleting a branch discards any commits only it has.
