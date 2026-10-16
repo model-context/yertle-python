@@ -19,6 +19,7 @@ from yertle_client.api.directories import (
 )
 from yertle_client.api.nodes import (
     create_node_orgs_org_id_nodes_post,
+    delete_node_orgs_org_id_nodes_node_id_delete,
     list_all_nodes_across_orgs_orgs_all_nodes_get,
     list_nodes_orgs_org_id_nodes_get,
 )
@@ -31,6 +32,7 @@ from yertle_client.api.nodes import (
 from yertle_client.models import (
     CreateNodeRequest,
     CreateNodeRequestTagsType0,
+    DeletionResultResponse,
     HierarchyEntryResponse,
     HierarchyResponse,
     NodeListResponse,
@@ -47,6 +49,7 @@ __all__ = [
     "ALL_ORGS",
     "DEFAULT_BRANCH",
     "create",
+    "delete",
     "get",
     "list",
     "push",
@@ -300,4 +303,38 @@ def push(
     )
     if not isinstance(response, PushStateResponse):
         raise RuntimeError(f"Unexpected response from nodes.push({target_node!r}): {response!r}")
+    return response
+
+
+def delete(node_id: str, *, org_id: str) -> DeletionResultResponse:
+    """Soft-delete a node, returning the backend's result.
+
+    **Soft**, and the distinction matters to anyone reporting it: all git
+    history survives — commits, objects, branches — and the node row stays.
+    What changes is that it is marked deleted in the main projection and its
+    RAG document row is dropped, so it stops appearing in listings, the
+    hierarchy and search. Per the route docstring it "remains visible in
+    parent canvases that contain it".
+
+    The backend refuses to delete a node that is attached in either
+    direction, with a 400 naming the count:
+
+        Cannot delete node that is a child of other nodes.
+        This node is contained in 1 parent node(s).
+
+    That guard reads the *main* projection, so a node attached only on a
+    non-main branch is not protected by it — see yertle#392. Detach on main
+    first, which means editing the parent's document and pushing it.
+
+    There is no undelete endpoint.
+    """
+    if org_id == ALL_ORGS:
+        raise ValueError("nodes.delete() needs a specific org_id, not 'all'.")
+    response = delete_node_orgs_org_id_nodes_node_id_delete.sync(
+        client=client(),
+        org_id=UUID(org_id),
+        node_id=node_id,
+    )
+    if not isinstance(response, DeletionResultResponse):
+        raise RuntimeError(f"Unexpected response from nodes.delete({node_id!r}): {response!r}")
     return response
