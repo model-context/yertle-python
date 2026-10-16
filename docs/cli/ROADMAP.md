@@ -101,7 +101,13 @@ single-child attach as a convenience on top, not the primitive underneath.
 
 ## Phases
 
-### Phase 1 — the simple writes
+All three shipped, in `yertle` 0.4.0 and 0.5.0. This section is kept as the
+record of what was built and why, not as a list of work to pick up — the
+reasoning below is what is still worth reading. Open work lives in GitHub
+issues (model-context/yertle-python#43).
+
+
+### Phase 1 — the simple writes — SHIPPED
 
 - `yertle nodes create <title>` with `--description`, `--tag key=value`
   (repeatable, matching `nodes search`), `--dir`, `--public-id`, `--message`
@@ -148,7 +154,7 @@ batch case is the normal one. Two commands (`create`, then `attach`) is one
 mental model for both, instead of a shortcut whose failure mode is a
 conflict storm.
 
-### Phase 2 — one honest push layer
+### Phase 2 — one honest push layer — SHIPPED
 
 One SDK primitive, in `yertle.nodes`, that owns the whole sequence: read head,
 read complete state, apply a caller-supplied change, push, retry once on 409.
@@ -177,16 +183,33 @@ reporting success — and it would ship green. Whatever the implementation, a
 test that asserts tags and directories survive an unrelated change is
 mandatory, and should be written before the feature.
 
-### Phase 3 — declarative subtree authoring
+### Phase 3 — declarative authoring, one node at a time — SHIPPED
 
-    yertle nodes get <id> > diagram.json     # state, and its own base commit
+    yertle nodes show <id> --format json > diagram.json
     # ...edit...
-    yertle apply -f diagram.json
+    yertle nodes apply -f diagram.json -m "what changed"
 
-The whole desired state of a subtree in one document: nodes, containment,
-connections, positions. Maps 1:1 onto `push` with no translation layer, and is
-the shape a model is best at — emit one document rather than orchestrate
-twenty calls that can each fail halfway.
+One node's whole desired state in one document: its own fields, tags and
+directories, which children it contains and where they sit, and the
+connections between those children. Maps 1:1 onto `push` with no translation
+layer, and is the shape a model is best at — emit one document rather than
+orchestrate twenty calls that can each fail halfway.
+
+**One node, deliberately.** An earlier draft of this section said "subtree",
+which was wrong and worth correcting rather than quietly dropping. A node's
+document lists its children by id; a child that has children of its own has
+its own document. So a three-level diagram is one `apply` per non-leaf node,
+not one `apply` for the whole thing.
+
+That is the right boundary, decided 2026-10-16, and it is the backend's too:
+`push` is per-node, and a node is the unit that has a branch, a head commit
+and a concurrency check. A multi-node apply would have to be N pushes with no
+transaction around them, so a failure halfway would leave a partial diagram
+with nothing to roll back — a worse shape than N honest commands, and one
+whose partial-failure story would have to be invented for a need nobody has
+hit yet.
+
+Nothing here is outstanding. **Do not pick this up as unfinished work.**
 
 #### Why this is the target, and not just ergonomics
 
@@ -223,6 +246,17 @@ rather than a silent clobber.
 
 This is `kubectl get -o yaml` -> edit -> `kubectl apply -f`, and it is why
 that workflow is safe for agents with no tool description attached.
+
+**Tested, 2026-10-16.** This section makes a falsifiable claim: that an agent
+with no briefing can drive the CLI safely, because a valid write document can
+only be obtained by reading. An agent with no prior context was given the
+CLI and built a high-quality diagram of the Anthropic platform with it.
+
+That is the evidence for keeping the precondition — the refusal to accept a
+document without an `expected_head_commit` — even though it looks like
+friction when you already know the workflow. It is recorded here because it
+is the kind of result that gets forgotten and then re-litigated as "why does
+apply reject my hand-written file".
 
 A verb-per-mutation surface cannot get here. `nodes attach --to P` must do a
 hidden read, and a hidden read is a hidden merge policy the caller can neither
