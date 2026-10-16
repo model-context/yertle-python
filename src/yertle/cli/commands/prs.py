@@ -189,21 +189,31 @@ def merge_pr(
     number: NumberArgument,
     org: SingleOrgOption = None,
 ) -> None:
-    """Merge a pull request into its target branch."""
+    """Merge a pull request into its target branch.
+
+    Yertle merges fast-forward only: the target branch is advanced to the
+    source branch's head, so history stays linear and no merge commit is
+    created. If the target has diverged, the merge is refused and the
+    source branch has to be rebased first.
+    """
     org_id = resolve_one_org(org, command="prs merge")
 
     with api_errors():
         result = yertle.prs.merge(number, node_id=node_id, org_id=org_id)
 
     console = Console()
+    # Defensive: every failure path on this endpoint is a 4xx, so a 200 always
+    # carries merged=true and this cannot currently fire. Kept so a backend
+    # that starts reporting soft failures is not read as success. yertle#389.
     if not result.merged:
         die(f"PR #{number} was not merged. Check `yertle prs show {node_id} {number}`.")
     console.print(f"[green]✓[/green] Merged [bold]#{number}[/bold]")
-    # `merge_commit` is typed as a required str in the OpenAPI schema even
-    # though a declined merge has none, so an empty value is expected rather
-    # than exceptional.
+    # Not a merge commit, despite the field's name: Yertle fast-forwards, so
+    # this is the source branch's head that the target was advanced to. Saying
+    # "merge commit" would send someone looking for a two-parent commit that
+    # does not exist. Filed as yertle#389.
     if result.merge_commit:
-        console.print(f"[dim]  merge commit {result.merge_commit}[/dim]")
+        console.print(f"[dim]  target fast-forwarded to {result.merge_commit}[/dim]")
 
 
 @app.command("close")

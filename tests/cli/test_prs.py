@@ -143,12 +143,20 @@ def test_create_requires_a_source_branch(_client, sync) -> None:
 
 @patch(_MERGE, return_value=MergePRResponse(merged=True, merge_commit="cccc"))
 @patch("yertle._client.get_client", return_value=object())
-def test_merge_reports_the_merge_commit(_client, _sync) -> None:
+def test_merge_does_not_call_it_a_merge_commit(_client, _sync) -> None:
+    """Yertle fast-forwards, so no merge commit exists to point at.
+
+    The field is named `merge_commit`, but the route docstring is explicit
+    that the target is advanced to the source head and no commit is
+    created. Printing "merge commit" sends a reader looking for a
+    two-parent commit that is not there. Filed as yertle#389.
+    """
     result = runner.invoke(app, ["prs", "merge", NODE, "1", "--org", ORG])
     assert result.exit_code == 0, result.output
     text = plain(result.output)
     assert "Merged #1" in text
-    assert "cccc" in text
+    assert "fast-forwarded to cccc" in text
+    assert "merge commit" not in text
 
 
 @patch(_MERGE, return_value=MergePRResponse(merged=False, merge_commit=""))
