@@ -101,6 +101,12 @@ services connect, and where things live.
       that removes something unless you pass --allow-deletes, and --dry-run
       shows the diff without writing.
 
+  yertle nodes delete <id>            Soft-delete a node
+
+      History survives and parent canvases still show it; it stops
+      appearing in lists, the tree and search. There is no undelete. A
+      node with parents or children is refused — detach it first.
+
   A new node is created [bold]unattached[/bold]: it belongs to the organization but
   sits under no parent, so nodes tree lists it at the top level beside the
   org's root rather than inside the hierarchy. Attaching it to a parent is a

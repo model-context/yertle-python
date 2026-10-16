@@ -2,6 +2,7 @@
 
 import builtins
 import json
+import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import Annotated, Any
@@ -696,3 +697,60 @@ def _render_push_result(console: Console, result: PushStateResponse) -> None:
         console.print(
             "[dim]  These were not stored. A misspelled field looks exactly like this.[/dim]"
         )
+
+
+@app.command("delete")
+def delete_node(
+    node_id: NodeIdArgument,
+    org: SingleOrgOption = None,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", "-y", help="Skip the confirmation prompt."),
+    ] = False,
+) -> None:
+    """Delete a node.
+
+    This is a [bold]soft[/bold] delete. All git history survives — commits,
+    branches, objects — and the node keeps its id. What changes is that it
+    stops appearing in `nodes list`, `nodes tree` and search. It still shows
+    in the canvas of any parent that contains it, and there is no undelete.
+
+    A node that is attached to a parent, or that contains children, is
+    refused: detach it first by editing the parent's document and applying
+    it. That check reads the main branch only, so a node attached on another
+    branch is not protected by it.
+    """
+    org_id = resolve_one_org(org, command="nodes delete")
+
+    # Name what is being deleted before asking. A uuid in a confirmation
+    # prompt is not something anyone can check.
+    with api_errors():
+        doc = yertle.nodes.get(node_id, org_id=org_id)
+    title = doc.state.node.title or "(untitled)"
+    counts = doc.status.counts
+
+    console = Console()
+    console.print(f"[bold]{title}[/bold] [dim]{node_id}[/dim]")
+    console.print(
+        f"[dim]  {counts.children} child(ren), {counts.parents} parent(s), "
+        f"{counts.connections} connection(s) between children[/dim]"
+    )
+
+    # Prompt only when someone is there to answer. In a pipe this would hang
+    # forever, which is the worst failure mode available to a CLI.
+    if not yes:
+        if not sys.stdin.isatty():
+            die("Refusing to delete without confirmation. Pass --yes when not on a terminal.")
+        typer.confirm("Delete this node?", abort=True)
+
+    with api_errors():
+        result = yertle.nodes.delete(node_id, org_id=org_id)
+
+    if not result.success:
+        die(f"Not deleted: {result.message}")
+    # Say "soft" rather than "deleted": history survives and parent canvases
+    # still show it, so a flat "Deleted" would be wrong in two senses.
+    console.print(f"[green]✓[/green] Soft-deleted [bold]{title}[/bold]")
+    console.print(
+        "[dim]  History is kept; it no longer appears in lists, the tree or search.[/dim]"
+    )
