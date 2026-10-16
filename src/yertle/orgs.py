@@ -19,17 +19,19 @@ from yertle_client.api.organizations import (
     create_organization_orgs_post,
     get_organization_orgs_org_id_get,
     list_organizations_orgs_get,
+    update_organization_orgs_org_id_patch,
 )
 from yertle_client.models import (
     CreateOrganizationRequest,
     OrganizationListResponse,
     OrganizationResponse,
+    UpdateOrganizationRequest,
 )
 from yertle_client.types import UNSET
 
 from yertle._client import client
 
-__all__ = ["create", "get", "list"]
+__all__ = ["create", "get", "list", "update"]
 
 
 # `list` shadows the builtin inside this module — annotations reference
@@ -76,4 +78,32 @@ def create(name: str, *, description: str | None = None) -> OrganizationResponse
     )
     if not isinstance(response, OrganizationResponse):
         raise RuntimeError(f"Unexpected response from orgs.create({name!r}): {response!r}")
+    return response
+
+
+def update(
+    org_id: str,
+    *,
+    name: str | None = None,
+    description: str | None = None,
+) -> OrganizationResponse:
+    """Change an organization's name or description, returning it as stored.
+
+    A genuine PATCH: a field you do not pass is not sent, so the backend
+    leaves it alone. That is what lets you rename an organization without
+    also having to restate its description.
+
+    Passing an empty string for `description` is therefore different from
+    omitting it — the empty string clears the description, omission keeps it.
+    """
+    response = update_organization_orgs_org_id_patch.sync(
+        client=client(),
+        org_id=org_id,
+        body=UpdateOrganizationRequest(
+            name=name if name is not None else UNSET,
+            description=description if description is not None else UNSET,
+        ),
+    )
+    if not isinstance(response, OrganizationResponse):
+        raise RuntimeError(f"Unexpected response from orgs.update({org_id!r}): {response!r}")
     return response

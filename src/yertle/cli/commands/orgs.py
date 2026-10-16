@@ -203,3 +203,41 @@ def create_org(
     if root and not isinstance(root, Unset):
         console.print(f"[dim]  Root node {root} — attach nodes to this one.[/dim]")
     console.print(f"[dim]  Use it by default: yertle orgs use {org.id}[/dim]")
+
+
+@app.command("update")
+def update_org(
+    org_id: Annotated[str, typer.Argument(help="Organization id from `yertle orgs list`.")],
+    name: Annotated[str | None, typer.Option("--name", "-n", help="New name.")] = None,
+    description: Annotated[
+        str | None,
+        typer.Option("--description", "-d", help="New description. Pass '' to clear it."),
+    ] = None,
+    fmt: FormatOption = Format.TABLE,
+) -> None:
+    """Rename an organization, or change its description.
+
+    Only what you pass is changed; anything you leave out is untouched. An
+    empty --description clears the description, which is different from
+    omitting the option.
+    """
+    if validate_org(org_id.strip()) == ALL_ORGS:
+        die(f"`orgs update` needs one organization id, not '{ALL_ORGS}'.")
+    if name is None and description is None:
+        die("Nothing to change. Pass --name, --description, or both.")
+
+    with api_errors():
+        org = yertle.orgs.update(org_id.strip(), name=name, description=description)
+
+    if fmt is Format.JSON:
+        dump_json(org)
+        return
+
+    console = Console()
+    console.print(f"[green]✓[/green] Updated [bold]{org.name}[/bold]")
+    changed = [
+        label
+        for label, value in (("name", name), ("description", description))
+        if value is not None
+    ]
+    console.print(f"[dim]  {' and '.join(changed)} changed · {org.id}[/dim]")

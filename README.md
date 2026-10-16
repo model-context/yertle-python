@@ -18,7 +18,7 @@ That puts `yertle` on your PATH:
 |---|---|
 | Find your way around | `orgs list`, `orgs show`, `orgs use`, `nodes list`, `nodes tree` |
 | Inspect | `nodes show`, `nodes search`, `branches list`, `prs list`, `prs show` |
-| Change things | `orgs create`, `nodes create`, `nodes apply`, `branches create`, `branches delete` |
+| Change things | `orgs create`, `orgs update`, `nodes create`, `nodes apply`, `branches create`, `branches delete` |
 | Review | `prs create`, `prs merge`, `prs close` |
 | Everything else | `about`, `version`, `login`, `auth status` |
 

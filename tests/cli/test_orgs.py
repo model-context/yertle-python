@@ -17,6 +17,7 @@ from yertle_client.models import (
     OrganizationResponse,
     OrganizationResponseRoleType0,
 )
+from yertle_client.types import UNSET
 
 from tests._output import plain as _cells
 from yertle.cli._context import ORG_ENV_VAR
@@ -24,6 +25,8 @@ from yertle.cli.main import app
 from yertle.shared import auth as auth_mod
 
 runner = CliRunner()
+
+ORG = "8f14e45f-ceea-467a-9575-28db8d0dc4db"
 
 
 def _fake_response() -> OrganizationListResponse:
@@ -353,3 +356,52 @@ def test_orgs_create_json_dumps_the_org(_get_client, sync) -> None:
     result = runner.invoke(app, ["orgs", "create", "Acme", "--format", "json"])
     assert result.exit_code == 0, result.output
     assert json.loads(result.output)["name"] == "Acme"
+
+
+_UPDATE = "yertle.orgs.update_organization_orgs_org_id_patch.sync"
+
+
+@patch(_UPDATE)
+@patch("yertle._client.get_client", return_value=object())
+def test_orgs_update_sends_only_what_changed(_get_client, sync) -> None:
+    """A real PATCH: an omitted field is not sent, so the backend keeps it.
+
+    Sending null for the field you did not touch would blank it, which is
+    how a rename quietly erases a description.
+    """
+    sync.return_value = _fake_response().organizations[0]
+    result = runner.invoke(app, ["orgs", "update", ORG, "--name", "Renamed"])
+    assert result.exit_code == 0, result.output
+    body = sync.call_args.kwargs["body"]
+    assert body.name == "Renamed"
+    assert body.description is UNSET
+
+
+@patch(_UPDATE)
+@patch("yertle._client.get_client", return_value=object())
+def test_orgs_update_can_clear_a_description(_get_client, sync) -> None:
+    """An empty string is a value; omission is not. They must differ."""
+    sync.return_value = _fake_response().organizations[0]
+    result = runner.invoke(app, ["orgs", "update", ORG, "--description", ""])
+    assert result.exit_code == 0, result.output
+    body = sync.call_args.kwargs["body"]
+    assert body.description == ""
+    assert body.name is UNSET
+
+
+@patch(_UPDATE)
+@patch("yertle._client.get_client", return_value=object())
+def test_orgs_update_refuses_a_no_op(_get_client, sync) -> None:
+    """Better than a request that changes nothing and reports success."""
+    result = runner.invoke(app, ["orgs", "update", ORG])
+    assert result.exit_code == 1
+    assert "Nothing to change" in result.output
+    sync.assert_not_called()
+
+
+@patch(_UPDATE)
+@patch("yertle._client.get_client", return_value=object())
+def test_orgs_update_rejects_all(_get_client, sync) -> None:
+    result = runner.invoke(app, ["orgs", "update", "all", "--name", "X"])
+    assert result.exit_code == 1
+    sync.assert_not_called()

@@ -48,6 +48,7 @@ services connect, and where things live.
 
       --org <id>  >  $YERTLE_ORG  >  yertle orgs use  >  every org
 
+  yertle orgs update <id>    Rename it, or change its description
   yertle orgs use <id>       Set a default, so you stop typing --org
   yertle orgs use all        Undo it
 
