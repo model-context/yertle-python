@@ -141,6 +141,21 @@ def test_push_refuses_a_document_that_names_no_target(_client, sync) -> None:
     sync.assert_not_called()
 
 
+@patch(_PUSH)
+@patch("yertle._client.get_client", return_value=object())
+def test_push_refuses_a_document_read_at_a_commit(_client, sync) -> None:
+    """A document read at a commit has no base head: it is read-only.
+
+    Sending it anyway would put `null` where the backend's conflict check
+    needs a commit, so the SDK says what happened instead.
+    """
+    doc = _document()
+    doc.expected_head_commit = None
+    with pytest.raises(ValueError, match="read-only"):
+        yertle.nodes.push(doc, message="x")
+    sync.assert_not_called()
+
+
 @patch(_PUSH, return_value=None)
 @patch("yertle._client.get_client", return_value=object())
 def test_push_raises_on_an_unexpected_response(_client, _sync) -> None:

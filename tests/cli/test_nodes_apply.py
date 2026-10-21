@@ -77,6 +77,17 @@ def test_refuses_a_document_that_was_never_read(tmp_path: Path) -> None:
     push.assert_not_called()
 
 
+def test_refuses_a_document_with_no_branch(tmp_path: Path) -> None:
+    """The branch to apply to comes from the document; without one, stop."""
+    path = _written(tmp_path, lambda raw: raw["status"].pop("branch"))
+    result, push = _apply(path)
+    assert result.exit_code == 1
+    text = plain(result.output)
+    assert "status.branch" in text
+    assert "nodes show" in text
+    push.assert_not_called()
+
+
 def test_refuses_something_that_is_not_a_document(tmp_path: Path) -> None:
     path = tmp_path / "doc.json"
     path.write_text(json.dumps({"hello": "world"}))

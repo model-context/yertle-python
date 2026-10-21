@@ -32,7 +32,11 @@ dependencies = [
     # floor is 0.3.1 rather than 0.3.0 because 0.3.0 shipped before a schema
     # title collision was fixed upstream (yertle#385) — the generator silently
     # dropped models, so some operations were missing from it.
-    "yertle-client>=0.3.1,<0.4.0",
+    #
+    # 0.4.0 types a tree document read at a commit: `expected_head_commit`
+    # and `status.branch` become optional (such a document is read-only), and
+    # the deleted /complete routes are gone (yertle#383, #411).
+    "yertle-client>=0.4.0,<0.5.0",
     # typer + rich are base, not an extra, so `uv tool install yertle` gives a
     # working CLI. They used to sit behind [cli], which made the most natural
     # install command fail with an ImportError traceback — the package is named

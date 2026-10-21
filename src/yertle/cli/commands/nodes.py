@@ -621,6 +621,11 @@ def apply_node(
     document = _load_document(file)
     org_id, node_id = document.status.org_id, document.status.node_id
     branch = document.status.branch
+    if not isinstance(branch, str) or not branch:
+        die(
+            f"{file} has no `status.branch`, so it was not read at a branch head.\n"
+            f"  Start from `yertle nodes show <id> --format json > {file}` and edit that.",
+        )
 
     with api_errors():
         current = yertle.nodes.get(node_id, org_id=org_id, branch=branch)
