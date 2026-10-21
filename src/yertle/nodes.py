@@ -289,6 +289,16 @@ def push(
             "nodes.push() could not tell which node to write to. "
             "Pass org_id and node_id, or use a document from nodes.document().",
         )
+    # Only a read at a branch head carries one. A document read at a commit
+    # leaves it out because it is read-only; the backend's conflict check
+    # has nothing to compare against without it.
+    base = expected_head_commit or document.expected_head_commit
+    if not isinstance(base, str) or not base:
+        raise ValueError(
+            "nodes.push() has no base commit: this document has no "
+            "expected_head_commit, so it was read at a commit and is read-only. "
+            "Read the branch with nodes.get() and edit that, or pass expected_head_commit.",
+        )
 
     response = _push.sync(
         client=client(),
@@ -298,7 +308,7 @@ def push(
         body=PushStateRequest(
             message=message,
             state=document.state,
-            expected_head_commit=expected_head_commit or document.expected_head_commit,
+            expected_head_commit=base,
         ),
     )
     if not isinstance(response, PushStateResponse):

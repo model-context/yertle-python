@@ -2791,22 +2791,22 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.15.13" },
     { name = "typer", specifier = ">=0.12" },
     { name = "vulture", marker = "extra == 'dev'", specifier = ">=2.11" },
-    { name = "yertle-client", specifier = ">=0.3.1,<0.4.0" },
+    { name = "yertle-client", specifier = ">=0.4.0,<0.5.0" },
 ]
 provides-extras = ["sre", "mcp", "dev"]
 
 [[package]]
 name = "yertle-client"
-version = "0.3.1"
+version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
     { name = "httpx" },
     { name = "python-dateutil" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/0c/3a/ad1b1670f01701032d632bc4b80271b63d8555fe10f15766378de27b317c/yertle_client-0.3.1.tar.gz", hash = "sha256:5016dc854b9bdfcfd9327d42d82094a01fd5a1f711c01b846d556a8e5ada9b8c", size = 72198, upload-time = "2026-10-08T21:45:55.547Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b1/90/a847197c3460421cd93999937f43f9f80fb2bfd7e47d227d24d54716ab23/yertle_client-0.4.0.tar.gz", hash = "sha256:3ff2ddbfa7652f97b5e3aa6e9503ab4dd64444fe98c421bb2734a63f34c71cc8", size = 70679, upload-time = "2026-10-21T19:32:22.307Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/db/f4/3769fae71bec70885af2ff67fa2e36dfd21fd208a62bdbe7f2bbcab8c17f/yertle_client-0.3.1-py3-none-any.whl", hash = "sha256:3e210614138d03118e4df8751bfeb706ed0245466212c1a8446c2607d43b56a2", size = 231439, upload-time = "2026-10-08T21:45:54.18Z" },
+    { url = "https://files.pythonhosted.org/packages/9b/5d/e36ccdbd99e558488c7e701d2065863109f2025bea9b8d29aa0ca22df04d/yertle_client-0.4.0-py3-none-any.whl", hash = "sha256:9de25b9c06d7f68bd731d2deade5c2a04f1714952f46603de3a20a3eafbf5b52", size = 222776, upload-time = "2026-10-21T19:32:20.825Z" },
 ]
 
 [[package]]
