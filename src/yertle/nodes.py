@@ -220,9 +220,9 @@ def get(
     the canvas renderer: it mixes stored state with derived views and
     render-time fields, so editing it and sending it back was guesswork. The
     backend guarantees *this* document round-trips and guarantees nothing of
-    the sort for `/complete`, which is itself on the way out (yertle#383).
-    Nothing here reads `/complete` any more; callers that want the render
-    view can reach the wire layer directly.
+    the sort for `/complete`, which the backend has since deleted
+    (yertle#383). For the rendering view, read the canvas: every entry
+    there is a tree document too.
 
     Fields prefixed `_` (`_title` on a child position, `_from_title` on a
     connection) are annotations: they exist so a document can be read and

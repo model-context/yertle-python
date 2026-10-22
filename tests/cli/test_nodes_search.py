@@ -3,10 +3,10 @@
 Fixtures are captured from a real `POST /orgs/{id}/search/retrieve`. Two shapes
 here differ from the endpoints the other commands use:
 
-- `tags` are **flat** (`{"ARN": "arn:..."}`), where `/complete` nests them
-  under `value`. Same concept, two wire shapes.
-- `connections` arrive denormalised with `from_title` / `to_title`, so no id
-  lookup is needed — unlike `/complete`'s internal connections.
+- `tags` are **flat** (`{"ARN": "arn:..."}`), where the tree document nests
+  them under `value`. Same concept, two wire shapes.
+- `connections` arrive denormalised with `from_title` / `to_title` (no `_`;
+  the tree document's read-only equivalents are `_from_title` / `_to_title`).
 
 `path` is only populated on expanded results, which is why the Path column is
 conditional.
