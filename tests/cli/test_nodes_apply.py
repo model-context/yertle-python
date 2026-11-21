@@ -43,14 +43,16 @@ def _result(
     *,
     unchanged: bool = False,
     ignored_keys: list[str] | None = None,
+    changed: int = 1,
+    not_changed: int = 0,
 ) -> PushStateResponse:
     return PushStateResponse(
         commit_id="c0ffee00-0000-0000-0000-000000000000",
         node_id=str(_RAW["status"]["node_id"]),
         branch="main",
         message="m",
-        objects_created=1,
-        objects_reused=0,
+        objects_created=changed,
+        objects_reused=not_changed,
         unchanged=unchanged,
         ignored_keys=ignored_keys or [],
     )
@@ -184,6 +186,31 @@ def test_ignored_keys_are_surfaced(tmp_path: Path) -> None:
     text = plain(result.output)
     assert "Ignored 1 unknown key" in text
     assert "state.connections[].lable" in text
+
+
+@pytest.mark.parametrize(
+    ("changed", "not_changed", "expected"),
+    [
+        (1, 6, "1 entity changed, 6 unchanged"),
+        (3, 1, "3 entities changed, 1 unchanged"),
+    ],
+)
+def test_the_push_counts_read_as_changed_and_unchanged(
+    tmp_path: Path, changed: int, not_changed: int, expected: str
+) -> None:
+    """Since yertle#431 the `objects_*` fields count entities against the head.
+
+    The names kept "objects" for wire compatibility, but nothing is stored as
+    an object any more, so "object(s) created, reused" misdescribes it (#59).
+    """
+    path = _written(tmp_path, lambda raw: raw["state"]["node"].update(title="Renamed"))
+    result, _ = _apply(
+        path, "-m", "x", push_result=_result(changed=changed, not_changed=not_changed)
+    )
+    assert result.exit_code == 0, result.output
+    text = plain(result.output)
+    assert expected in text
+    assert "object" not in text
 
 
 def test_an_unchanged_push_is_reported_as_such(tmp_path: Path) -> None:
