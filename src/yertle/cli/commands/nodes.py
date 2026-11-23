@@ -683,9 +683,13 @@ def _render_push_result(console: Console, result: PushStateResponse) -> None:
         return
 
     console.print(f"[green]✓[/green] Committed [bold]{result.commit_id}[/bold]")
-    console.print(
-        f"[dim]  {result.objects_created} object(s) created, {result.objects_reused} reused[/dim]"
-    )
+    # The wire names predate yertle#431: there are no stored objects any more,
+    # and the two fields now count entities added-or-modified and unchanged
+    # against the branch head. "Entity" keeps this line from reading as a
+    # repeat of the diff's own "N changed", which counts something else.
+    changed = result.objects_created
+    noun = "entity" if changed == 1 else "entities"
+    console.print(f"[dim]  {changed} {noun} changed, {result.objects_reused} unchanged[/dim]")
 
     mappings = result.connection_id_mappings
     if mappings is not None and not isinstance(mappings, Unset):
@@ -715,8 +719,8 @@ def delete_node(
 ) -> None:
     """Delete a node.
 
-    This is a [bold]soft[/bold] delete. All git history survives — commits,
-    branches, objects — and the node keeps its id. What changes is that it
+    This is a [bold]soft[/bold] delete. All git history survives — commits
+    and branches — and the node keeps its id. What changes is that it
     stops appearing in `nodes list`, `nodes tree` and search. It still shows
     in the canvas of any parent that contains it, and there is no undelete.
 

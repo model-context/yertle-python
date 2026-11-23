@@ -42,7 +42,9 @@ Three properties make this a different kind of operation:
 
 1. **`state` is the complete desired state, not a patch.** The route docstring
    says so: *"clients send the complete desired state, and the server handles
-   diffing and object reuse automatically."* Omitted keys are **deleted**. The
+   diffing and object reuse automatically."* (That was the wording at the
+   time; since yertle#431 there are no stored objects, and it reads "the
+   server diffs it against the branch head".) Omitted keys are **deleted**. The
    integration test carries the warning in its own payload comments —
    `# Keep same title`, `# Keep same tags`, `# Keep same directories`
    (`test_04_attach_child_node_branch.py`).

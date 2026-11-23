@@ -320,7 +320,7 @@ def delete(node_id: str, *, org_id: str) -> DeletionResultResponse:
     """Soft-delete a node, returning the backend's result.
 
     **Soft**, and the distinction matters to anyone reporting it: all git
-    history survives — commits, objects, branches — and the node row stays.
+    history survives — commits and branches — and the node row stays.
     What changes is that it is marked deleted in the main projection and its
     RAG document row is dropped, so it stops appearing in listings, the
     hierarchy and search. Per the route docstring it "remains visible in
