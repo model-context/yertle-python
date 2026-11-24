@@ -7,7 +7,13 @@ its own case.
 import pytest
 import typer
 
-from yertle.cli._context import ORG_ENV_VAR, resolve_org, resolve_org_setting
+from yertle.cli._context import (
+    ORG_ENV_VAR,
+    ResolvedOrg,
+    explicit_node_org,
+    resolve_org,
+    resolve_org_setting,
+)
 from yertle.shared import auth as auth_mod
 from yertle.shared.auth import Source
 
@@ -109,3 +115,20 @@ def test_saving_an_org_preserves_credentials() -> None:
     assert resolved.token == "yrt_secret"
     assert resolved.api_url == "https://api.example.test"
     assert resolve_org(None) == ORG
+
+
+def test_a_node_command_ignores_the_orgs_use_default() -> None:
+    """The node says which org it is in; a saved default must not override that."""
+    _persist(ORG)
+    assert explicit_node_org() is None
+
+
+def test_a_node_command_takes_the_flag_then_the_env_var(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(ORG_ENV_VAR, OTHER)
+    assert explicit_node_org() == ResolvedOrg(OTHER, Source.ENV)
+    assert explicit_node_org(ORG) == ResolvedOrg(ORG, Source.FLAG)
+
+
+@pytest.mark.parametrize("value", ["all", "  ", ""])
+def test_all_or_blank_names_no_org_for_a_node_command(value: str) -> None:
+    assert explicit_node_org(value) is None

@@ -6,17 +6,21 @@ CLI -> `yertle.branches` -> `yertle_client` path.
 
 import datetime
 import json
-from unittest.mock import patch
+from collections.abc import Iterator
+from unittest.mock import MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
 from yertle_client.models import BranchListResponse, BranchResponse, MessageResponse
 
 from tests._output import plain
+from tests._public_api import location
 from yertle.cli._context import ORG_ENV_VAR
 from yertle.cli.main import app
 
 runner = CliRunner()
+
+LOCATE = "yertle.nodes.locate_node_nodes_node_id_get.sync"
 
 ORG = "8f14e45f-ceea-467a-9575-28db8d0dc4db"
 NODE = "11111111-2222-3333-4444-555555555555"
@@ -29,6 +33,13 @@ _DELETE = "yertle.branches.delete_branch_orgs_org_id_nodes_node_id_branches_bran
 @pytest.fixture(autouse=True)
 def _no_ambient_org(monkeypatch: pytest.MonkeyPatch) -> None:  # pyright: ignore[reportUnusedFunction]
     monkeypatch.delenv(ORG_ENV_VAR, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _located() -> Iterator[MagicMock]:  # pyright: ignore[reportUnusedFunction]
+    """The node lookup every command here makes first, answering ORG."""
+    with patch(LOCATE, return_value=location(NODE, ORG)) as sync:
+        yield sync
 
 
 def _branch(name: str = "main", *, base: str | None = None, message: str | None = None):
@@ -128,16 +139,23 @@ def test_delete_forwards_force(_client, sync) -> None:
     assert sync.call_args.kwargs["force"] is True
 
 
+@pytest.mark.parametrize(
+    ("argv", "wire"),
+    [
+        (["branches", "list", NODE], _LIST),
+        (["branches", "create", NODE, "feature"], _CREATE),
+        (["branches", "delete", NODE, "feature"], _DELETE),
+    ],
+)
 @patch("yertle._client.get_client", return_value=object())
-def test_branch_commands_refuse_to_guess_the_organization(_client) -> None:
-    for argv in (
-        ["branches", "list", NODE],
-        ["branches", "create", NODE, "feature"],
-        ["branches", "delete", NODE, "feature"],
-    ):
-        result = runner.invoke(app, argv)
-        assert result.exit_code == 1, argv
-        assert "needs one organization" in result.output
+def test_branch_commands_look_the_organization_up(
+    _client, _located: MagicMock, argv: list[str], wire: str
+) -> None:
+    with patch(wire) as sync:
+        runner.invoke(app, argv)
+    _located.assert_called_once()
+    assert _located.call_args.kwargs["node_id"] == NODE
+    assert sync.call_args.kwargs["org_id"] == ORG
 
 
 @patch(_DELETE)

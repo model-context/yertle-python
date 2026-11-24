@@ -86,6 +86,12 @@ def use_org(
     between the escape hatch being discoverable and it existing only for
     readers of `--help`.
 
+    The default applies to commands that start from an organization: `nodes
+    list`, `nodes tree`, `nodes search` and `nodes create`. Commands that take
+    a node id (`nodes show`, `nodes delete`, `branches`, `prs`) look the
+    organization up from the node instead, so they work for any node you can
+    see, whatever the default.
+
     Persists to ~/.yertle/config.json, so it survives between shells — the
     same role `gcloud config set project` or `kubectl config use-context`
     plays. `--org` and $YERTLE_ORG still win over it for one-off overrides.

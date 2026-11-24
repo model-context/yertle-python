@@ -44,7 +44,7 @@ services connect, and where things live.
 
 [bold]Choosing an organization[/bold]
 
-  Most commands act on one organization. They resolve it in this order:
+  Commands that start from an organization resolve it in this order:
 
       --org <id>  >  $YERTLE_ORG  >  yertle orgs use  >  every org
 
@@ -53,8 +53,12 @@ services connect, and where things live.
   yertle orgs use all        Undo it
 
   Commands that can span organizations (nodes list, nodes tree) will do so
-  by default. Commands that cannot (nodes show, nodes search) ask you to
+  by default. Commands that cannot (nodes search, nodes create) ask you to
   pick one.
+
+  Commands that take a node id (nodes show, nodes delete, branches, prs)
+  need no org: they look it up from the node. `orgs use` does not apply to
+  them, and an --org or $YERTLE_ORG that is not the node's org is an error.
 
 [bold]Starting from nothing[/bold]
 

@@ -14,7 +14,7 @@ from yertle_client.models import BranchResponse
 from yertle_client.types import Unset
 
 import yertle
-from yertle.cli._context import NodeIdArgument, SingleOrgOption, resolve_one_org
+from yertle.cli._context import NodeIdArgument, NodeOrgOption, resolve_node_org
 from yertle.cli._errors import api_errors
 from yertle.cli._render import (
     FORMAT_EPILOG,
@@ -60,10 +60,10 @@ COLUMNS: list[Column[BranchResponse]] = [
 
 @app.command("list")
 def list_branches(
-    node_id: NodeIdArgument, org: SingleOrgOption = None, fmt: FormatOption = Format.TABLE
+    node_id: NodeIdArgument, org: NodeOrgOption = None, fmt: FormatOption = Format.TABLE
 ) -> None:
     """List the branches on a node."""
-    org_id = resolve_one_org(org, command="branches list")
+    org_id = resolve_node_org(node_id, org).value
 
     with api_errors():
         branches = yertle.branches.list(node_id, org_id=org_id)
@@ -80,7 +80,7 @@ def list_branches(
 def create_branch(
     node_id: NodeIdArgument,
     name: Annotated[str, typer.Argument(help="Name for the new branch.")],
-    org: SingleOrgOption = None,
+    org: NodeOrgOption = None,
     base: Annotated[
         str,
         typer.Option("--base", "-b", help="Branch to fork from."),
@@ -92,7 +92,7 @@ def create_branch(
     The branch starts at the base's head commit, so it is identical to the
     base until something is pushed to it.
     """
-    org_id = resolve_one_org(org, command="branches create")
+    org_id = resolve_node_org(node_id, org).value
 
     with api_errors():
         branch = yertle.branches.create(name, node_id=node_id, org_id=org_id, base_branch=base)
@@ -110,7 +110,7 @@ def create_branch(
 def delete_branch(
     node_id: NodeIdArgument,
     name: Annotated[str, typer.Argument(help="Branch to delete.")],
-    org: SingleOrgOption = None,
+    org: NodeOrgOption = None,
     force: Annotated[
         bool,
         typer.Option(
@@ -128,7 +128,7 @@ def delete_branch(
 
     `main` cannot be deleted.
     """
-    org_id = resolve_one_org(org, command="branches delete")
+    org_id = resolve_node_org(node_id, org).value
 
     with api_errors():
         message = yertle.branches.delete(name, node_id=node_id, org_id=org_id, force=force)

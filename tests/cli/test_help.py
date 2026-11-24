@@ -14,6 +14,7 @@ Both are the same failure: help that describes a CLI other than this one.
 """
 
 import click
+import pytest
 import typer
 from typer.testing import CliRunner
 
@@ -72,12 +73,12 @@ def test_epilog_names_a_real_flag() -> None:
 def test_single_org_commands_do_not_offer_all() -> None:
     """A command that refuses 'all' must not advertise it.
 
-    `nodes show`, `nodes search` and `nodes create` each act on exactly one
-    organization and exit 1 when the chain resolves to 'all'. They shared the
-    cross-org `--org` help, which told the reader 'all' was both valid and the
-    default — a claim none of them honours.
+    `nodes search` and `nodes create` each act on exactly one organization
+    and exit 1 when the chain resolves to 'all'. They shared the cross-org
+    `--org` help, which told the reader 'all' was both valid and the default —
+    a claim neither honours.
     """
-    for verb in ("show", "search", "create"):
+    for verb in ("search", "create"):
         text = _help("nodes", verb)
         assert "'all' is not valid" in text, f"nodes {verb} still offers 'all'"
         assert "then 'all'" not in text, f"nodes {verb} still defaults to 'all'"
@@ -87,3 +88,25 @@ def test_cross_org_commands_still_offer_all() -> None:
     """The inverse: `list` and `tree` genuinely do span organizations."""
     for verb in ("list", "tree"):
         assert "or 'all'" in _help("nodes", verb), f"nodes {verb} lost 'all'"
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        ("nodes", "show"),
+        ("nodes", "delete"),
+        ("branches", "list"),
+        ("branches", "create"),
+        ("branches", "delete"),
+        ("prs", "list"),
+        ("prs", "show"),
+        ("prs", "create"),
+        ("prs", "merge"),
+        ("prs", "close"),
+    ],
+)
+def test_node_commands_say_the_org_is_looked_up(command: tuple[str, str]) -> None:
+    """Their `--org` is a check, and the `orgs use` default does not reach them."""
+    text = _help(*command)
+    assert "Looked up from the node" in text
+    assert "`yertle orgs use` does not apply" in text

@@ -1,10 +1,10 @@
-"""Checking an organization id before it goes on the wire."""
+"""Checking an organization or node id before it goes on the wire."""
 
 from __future__ import annotations
 
 from uuid import UUID
 
-__all__ = ["wire_org_id"]
+__all__ = ["wire_node_id", "wire_org_id"]
 
 
 def wire_org_id(org_id: str) -> str:
@@ -19,3 +19,14 @@ def wire_org_id(org_id: str) -> str:
     effect of a client bump.
     """
     return str(UUID(org_id))
+
+
+def wire_node_id(node_id: str) -> str:
+    """Return `node_id` in canonical form, raising `ValueError` if it is not a UUID.
+
+    The node lookup routes type `node_id` as `str` for the same reason: with a
+    token, the backend also matches a short prefix within the caller's own
+    orgs. The SDK takes full ids only for now, so a typo fails here with a
+    `ValueError` instead of as a 404 that reads like "no such node".
+    """
+    return str(UUID(node_id))

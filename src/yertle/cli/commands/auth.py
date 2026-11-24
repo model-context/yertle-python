@@ -3,7 +3,7 @@
 import typer
 from rich.console import Console
 
-from yertle.cli._context import ORG_ENV_VAR, resolve_org_setting
+from yertle.cli._context import ORG_ENV_VAR, explicit_node_org, resolve_org_setting
 from yertle.cli._render import display_path
 from yertle.shared import auth
 
@@ -44,6 +44,8 @@ def _source_label(source: auth.Source, env_var: str) -> str:
         return f"from {display_path(auth.CONFIG_PATH)}"
     if source is auth.Source.DEFAULT:
         return "default"
+    if source is auth.Source.LOOKUP:
+        return "looked up from node"
     return "not set"
 
 
@@ -71,10 +73,18 @@ def status() -> None:
     # pointed at right now?" — and the question people actually ask about it
     # is "why *that* org", which is the provenance column.
     org = resolve_org_setting()
+    # Commands that take a node id answer "which org" differently: the node
+    # says, and the config-file default does not apply. Without a named org
+    # there is no value to show until a command has a node to look up.
+    node_org = explicit_node_org()
+    node_org_value, node_org_source = (
+        (node_org.value, node_org.source) if node_org else ("—", auth.Source.LOOKUP)
+    )
     rows = [
         ("API URL", resolved.api_url, _source_label(resolved.api_url_source, auth.API_URL_ENV_VAR)),
         ("Token", token_display, _source_label(resolved.token_source, auth.TOKEN_ENV_VAR)),
         ("Org", org.value, _source_label(org.source, ORG_ENV_VAR)),
+        ("Node org", node_org_value, _source_label(node_org_source, ORG_ENV_VAR)),
     ]
     # Size the value column to its contents rather than a fixed width: a long
     # API URL would otherwise shove the source column out of alignment.

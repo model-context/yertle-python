@@ -13,7 +13,7 @@ from yertle_client.models import PullRequestResponse
 from yertle_client.types import Unset
 
 import yertle
-from yertle.cli._context import NodeIdArgument, SingleOrgOption, resolve_one_org
+from yertle.cli._context import NodeIdArgument, NodeOrgOption, resolve_node_org
 from yertle.cli._errors import api_errors, die
 from yertle.cli._render import (
     FORMAT_EPILOG,
@@ -65,7 +65,7 @@ COLUMNS: list[Column[PullRequestResponse]] = [
 @app.command("list")
 def list_prs(
     node_id: NodeIdArgument,
-    org: SingleOrgOption = None,
+    org: NodeOrgOption = None,
     status: Annotated[
         str | None,
         typer.Option("--status", "-s", help="Filter: open, merged or closed."),
@@ -73,7 +73,7 @@ def list_prs(
     fmt: FormatOption = Format.TABLE,
 ) -> None:
     """List a node's pull requests."""
-    org_id = resolve_one_org(org, command="prs list")
+    org_id = resolve_node_org(node_id, org).value
 
     with api_errors():
         prs = yertle.prs.list(node_id, org_id=org_id, status=status)
@@ -86,11 +86,11 @@ def list_prs(
 def show_pr(
     node_id: NodeIdArgument,
     number: NumberArgument,
-    org: SingleOrgOption = None,
+    org: NodeOrgOption = None,
     fmt: FormatOption = Format.TABLE,
 ) -> None:
     """Show one pull request, including whether it can merge."""
-    org_id = resolve_one_org(org, command="prs show")
+    org_id = resolve_node_org(node_id, org).value
 
     with api_errors():
         pr = yertle.prs.get(number, node_id=node_id, org_id=org_id)
@@ -137,7 +137,7 @@ def _mergeability(pr: PullRequestResponse) -> str:
 def create_pr(
     node_id: NodeIdArgument,
     title: Annotated[str, typer.Argument(help="PR title.")],
-    org: SingleOrgOption = None,
+    org: NodeOrgOption = None,
     source: Annotated[
         str | None,
         typer.Option("--source", "-s", help="Branch to merge from."),
@@ -154,12 +154,13 @@ def create_pr(
     fmt: FormatOption = Format.TABLE,
 ) -> None:
     """Open a pull request from one branch into another."""
-    org_id = resolve_one_org(org, command="prs create")
+    # Checked first: it needs no request, and the org lookup does.
     if not source:
         die(
             "`prs create` needs a source branch.\n"
             "  Pass --source <branch>; see `yertle branches list <node-id>`.",
         )
+    org_id = resolve_node_org(node_id, org).value
 
     with api_errors():
         pr = yertle.prs.create(
@@ -187,7 +188,7 @@ def create_pr(
 def merge_pr(
     node_id: NodeIdArgument,
     number: NumberArgument,
-    org: SingleOrgOption = None,
+    org: NodeOrgOption = None,
 ) -> None:
     """Merge a pull request into its target branch.
 
@@ -196,7 +197,7 @@ def merge_pr(
     created. If the target has diverged, the merge is refused and the
     source branch has to be rebased first.
     """
-    org_id = resolve_one_org(org, command="prs merge")
+    org_id = resolve_node_org(node_id, org).value
 
     with api_errors():
         result = yertle.prs.merge(number, node_id=node_id, org_id=org_id)
@@ -220,10 +221,10 @@ def merge_pr(
 def close_pr(
     node_id: NodeIdArgument,
     number: NumberArgument,
-    org: SingleOrgOption = None,
+    org: NodeOrgOption = None,
 ) -> None:
     """Close a pull request without merging it."""
-    org_id = resolve_one_org(org, command="prs close")
+    org_id = resolve_node_org(node_id, org).value
 
     with api_errors():
         pr = yertle.prs.close(number, node_id=node_id, org_id=org_id)

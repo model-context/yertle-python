@@ -23,6 +23,8 @@ from tests._public_api import (
     LEDGER,
     ORG,
     PAYMENTS,
+    PRIVATE_NODE,
+    PRIVATE_ORG,
     ROOT,
     SCRATCHPAD,
     PublicAPI,
@@ -46,6 +48,7 @@ def served(public_api: PublicAPI) -> PublicAPI:
         f"/public/orgs/{ORG}/nodes/{PAYMENTS}/tree/main",
         fixture("tree_document.json"),
     )
+    public_api.serve(f"/public/nodes/{PAYMENTS}", fixture("node_location.json"))
     return public_api
 
 
@@ -146,14 +149,50 @@ def test_nodes_tree_json_is_what_a_member_gets(
 
 
 def test_nodes_show_reads_a_public_node(served: PublicAPI) -> None:
-    result = runner.invoke(app, ["nodes", "show", PAYMENTS, "--org", ORG])
+    """No org given: the public lookup finds it, then the public read uses it."""
+    result = runner.invoke(app, ["nodes", "show", PAYMENTS])
 
     assert result.exit_code == 0, result.output
     out = plain(result.output)
     assert "Payments" in out
     assert "Ledger DB" in out
     assert "Checkout API → this charges" in out
+    assert [request.url.path for request in served.requests] == [
+        f"/public/nodes/{PAYMENTS}",
+        f"/public/orgs/{ORG}/nodes/{PAYMENTS}/tree/main",
+    ]
     _no_token_sent(served)
+
+
+def test_nodes_show_checks_a_named_org_against_the_node(served: PublicAPI) -> None:
+    result = runner.invoke(app, ["nodes", "show", PAYMENTS, "--org", ORG])
+    assert result.exit_code == 0, result.output
+
+    result = runner.invoke(app, ["nodes", "show", PAYMENTS, "--org", PRIVATE_ORG])
+    assert result.exit_code == 1
+    out = plain(result.output)
+    assert f"is in organization {ORG} (Example public org)" in out
+    assert f"not {PRIVATE_ORG}, which came from --org" in out
+    assert served.requests[-1].url.path == f"/public/nodes/{PAYMENTS}"
+    _no_token_sent(served)
+
+
+def test_nodes_show_of_a_private_node_is_the_public_not_found(public_api: PublicAPI) -> None:
+    """The public lookup 404s for a private node exactly as for a missing one."""
+    public_api.serve(
+        f"/public/nodes/{PRIVATE_NODE}", fixture("not_found_node_location.json"), status=404
+    )
+
+    result = runner.invoke(app, ["nodes", "show", PRIVATE_NODE])
+
+    assert result.exit_code == 1
+    assert "Not found at https://api.yertle.com, or not a public organization." in plain(
+        result.output
+    )
+    assert [request.url.path for request in public_api.requests] == [
+        f"/public/nodes/{PRIVATE_NODE}"
+    ]
+    _no_token_sent(public_api)
 
 
 @pytest.mark.parametrize(
@@ -163,6 +202,7 @@ def test_nodes_show_reads_a_public_node(served: PublicAPI) -> None:
         ["nodes", "list", "--org", ORG],
         ["nodes", "tree", "--org", ORG],
         ["nodes", "show", PAYMENTS, "--org", ORG],
+        ["nodes", "show", PAYMENTS],
     ],
 )
 def test_a_private_or_missing_org_explains_itself(public_api: PublicAPI, argv: list[str]) -> None:
@@ -196,6 +236,17 @@ def test_nodes_without_an_org_says_to_pass_one(public_api: PublicAPI, command: s
         ["nodes", "create", "New node", "--org", ORG],
         ["nodes", "delete", PAYMENTS, "--org", ORG, "--yes"],
         ["branches", "list", PAYMENTS, "--org", ORG],
+        # Node commands with no org would look it up first; only a read may
+        # do that anonymously, so these fail before any request.
+        ["nodes", "delete", PAYMENTS, "--yes"],
+        ["branches", "list", PAYMENTS],
+        ["branches", "create", PAYMENTS, "feature"],
+        ["branches", "delete", PAYMENTS, "feature"],
+        ["prs", "list", PAYMENTS],
+        ["prs", "show", PAYMENTS, "1"],
+        ["prs", "create", PAYMENTS, "Title", "--source", "feature"],
+        ["prs", "merge", PAYMENTS, "1"],
+        ["prs", "close", PAYMENTS, "1"],
     ],
 )
 def test_everything_else_still_needs_a_token(public_api: PublicAPI, argv: list[str]) -> None:
