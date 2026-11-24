@@ -1,6 +1,5 @@
 """`yertle orgs` — work with organizations."""
 
-import json
 from typing import Annotated
 
 import typer
@@ -180,29 +179,26 @@ def show_org(
 
 
 def _show_public_org(org_id: str, fmt: Format) -> None:
-    """Show what an anonymous caller can learn about a public org.
-
-    Read from the org graph, which carries the org's name and every node.
-    The backend has a dedicated `/public/orgs/{id}` route with the
-    description and member count too, but the pinned `yertle-client` 0.4 has
-    no binding for it; switch to it when the pin moves.
-
-    The JSON keys are a subset of that route's response, under the same
-    names, so a script written against this output keeps working then.
-    """
+    """Show what the public route returns about an org: less than a member sees."""
     with api_errors(public=True):
-        graph = yertle.public.graph(org_id)
-    name = graph.org_name if isinstance(graph.org_name, str) else org_id
+        org = yertle.public.get_org(org_id)
 
     if fmt is Format.JSON:
-        payload = {"id": org_id, "name": name, "node_count": graph.total_nodes}
-        typer.echo(json.dumps(payload, indent=2))
+        dump_json(org)
         return
 
-    typer.echo(name)
-    typer.secho(org_id, dim=True)
+    typer.echo(org.name)
+    typer.secho(org.id, dim=True)
+    if description := (org.description or "").strip():
+        typer.echo(f"\n{description}")
     typer.echo()
-    fields([("Nodes", str(graph.total_nodes)), ("Visibility", "public")])
+    fields(
+        [
+            ("Members", str(org.member_count)),
+            ("Nodes", str(org.node_count)),
+            ("Visibility", "public"),
+        ],
+    )
     typer.secho("\nRead without a token. Run `yertle login` to see your own orgs.", dim=True)
 
 

@@ -7,7 +7,17 @@ import pytest
 from yertle_client.errors import UnexpectedStatus
 
 import yertle
-from tests._public_api import CHECKOUT, LEDGER, ORG, PAYMENTS, ROOT, PublicAPI, fixture
+from tests._public_api import (
+    AUTH,
+    CHECKOUT,
+    LEDGER,
+    ORG,
+    PAYMENTS,
+    ROOT,
+    SCRATCHPAD,
+    PublicAPI,
+    fixture,
+)
 from yertle._client import anonymous_client
 
 
@@ -17,13 +27,19 @@ def test_graph_reads_the_public_route_without_a_token(public_api: PublicAPI) -> 
     graph = yertle.public.graph(ORG)
 
     assert graph.org_name == "Example public org"
-    assert {node.id for node in graph.nodes} == {ROOT, PAYMENTS, LEDGER, CHECKOUT}
+    assert {node.id for node in graph.nodes} == {ROOT, PAYMENTS, LEDGER, CHECKOUT, AUTH, SCRATCHPAD}
     contains = {
         (edge.source, edge.target)
         for edge in graph.edges
         if edge.edge_type == yertle.public.PARENT_CHILD
     }
-    assert contains == {(ROOT, PAYMENTS), (ROOT, CHECKOUT), (PAYMENTS, LEDGER)}
+    assert contains == {
+        (ROOT, PAYMENTS),
+        (ROOT, CHECKOUT),
+        (ROOT, AUTH),
+        (PAYMENTS, LEDGER),
+        (CHECKOUT, LEDGER),
+    }
     (request,) = public_api.requests
     assert "authorization" not in request.headers
 
@@ -33,16 +49,45 @@ def test_list_nodes_returns_every_node(public_api: PublicAPI) -> None:
 
     nodes = yertle.public.list_nodes(ORG)
 
-    assert sorted(node.title for node in nodes) == ["Checkout API", "Ledger DB", "Payments", "Root"]
+    assert sorted(node.title for node in nodes) == [
+        "Auth / Sessions",
+        "Checkout API",
+        "Ledger DB",
+        "Payments",
+        "Root",
+        "Scratchpad",
+    ]
     (request,) = public_api.requests
     assert request.url.params["limit"] == "50"
     assert "authorization" not in request.headers
 
 
+def test_get_org_returns_the_public_allowlist(public_api: PublicAPI) -> None:
+    public_api.serve(f"/public/orgs/{ORG}", fixture("org.json"))
+
+    org = yertle.public.get_org(ORG)
+
+    assert (org.id, org.name) == (ORG, "Example public org")
+    assert org.description == "A public org used by the tests."
+    assert (org.member_count, org.node_count) == (1, 6)
+    (request,) = public_api.requests
+    assert "authorization" not in request.headers
+
+
+def test_a_private_org_is_indistinguishable_from_a_missing_one(public_api: PublicAPI) -> None:
+    """Both captures are real: one before the org was published, one for a random id."""
+    assert fixture("not_found_private_org.json") == fixture("not_found_org.json")
+    public_api.serve(f"/public/orgs/{ORG}", fixture("not_found_private_org.json"), status=404)
+
+    with pytest.raises(UnexpectedStatus) as excinfo:
+        yertle.public.get_org(ORG)
+    assert excinfo.value.status_code == 404
+
+
 def test_list_nodes_concatenates_pages(public_api: PublicAPI) -> None:
     """The page loop is shared with `nodes.list()`; check it is wired to the public route."""
     full: Any = fixture("nodes.json")
-    for offset in (0, 2):
+    for offset in range(0, full["total"], 2):
         page = copy.deepcopy(full)
         page["nodes"] = full["nodes"][offset : offset + 2]
         page["offset"] = offset
@@ -51,7 +96,7 @@ def test_list_nodes_concatenates_pages(public_api: PublicAPI) -> None:
     nodes = yertle.public.list_nodes(ORG)
 
     assert len(nodes) == full["total"]
-    assert [r.url.params["offset"] for r in public_api.requests] == ["0", "2"]
+    assert [r.url.params["offset"] for r in public_api.requests] == ["0", "2", "4"]
 
 
 def test_get_node_returns_the_tree_document(public_api: PublicAPI) -> None:

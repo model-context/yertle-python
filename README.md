@@ -131,7 +131,8 @@ yertle nodes show <node-id> --org <org-id>
 
 Every other command still needs `yertle login`. Once you are logged in, these
 commands read through your membership instead, as before. From Python, the
-same reads are `yertle.public.graph()`, `.list_nodes()` and `.get_node()`.
+same reads are `yertle.public.get_org()`, `.graph()`, `.list_nodes()` and
+`.get_node()`.
 
 ## Development
 

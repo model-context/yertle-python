@@ -18,7 +18,17 @@ from typer.testing import CliRunner
 from yertle_client.models import HierarchyResponse, OrgGraphResponse
 
 from tests._output import plain
-from tests._public_api import CHECKOUT, LEDGER, ORG, PAYMENTS, ROOT, PublicAPI, fixture
+from tests._public_api import (
+    AUTH,
+    CHECKOUT,
+    LEDGER,
+    ORG,
+    PAYMENTS,
+    ROOT,
+    SCRATCHPAD,
+    PublicAPI,
+    fixture,
+)
 from yertle.cli.commands.nodes import (  # pyright: ignore[reportPrivateUsage]
     _build_tree,
     _graph_tree,
@@ -33,6 +43,7 @@ NOT_AUTHENTICATED = "Not authenticated. Run `yertle login` or set $YERTLE_TOKEN.
 
 @pytest.fixture
 def served(public_api: PublicAPI) -> PublicAPI:
+    public_api.serve(f"/public/orgs/{ORG}", fixture("org.json"))
     public_api.serve(f"/public/orgs/{ORG}/graph", fixture("graph.json"))
     public_api.serve(f"/public/orgs/{ORG}/nodes", fixture("nodes.json"))
     public_api.serve(
@@ -55,24 +66,26 @@ def test_orgs_show_reads_a_public_org(served: PublicAPI) -> None:
     assert result.exit_code == 0, result.output
     out = plain(result.output)
     assert "Example public org" in out
-    assert "Nodes 4" in out
+    assert "A public org used by the tests." in out
+    assert "Members 1" in out
+    assert "Nodes 6" in out
     assert "Visibility public" in out
     assert "yertle login" in out
     _no_token_sent(served)
 
 
-def test_orgs_show_json_uses_the_public_org_field_names(served: PublicAPI) -> None:
+def test_orgs_show_json_is_the_public_org_response(served: PublicAPI) -> None:
     result = runner.invoke(app, ["orgs", "show", ORG, "--format", "json"])
 
     assert result.exit_code == 0, result.output
-    assert json.loads(result.output) == {"id": ORG, "name": "Example public org", "node_count": 4}
+    assert json.loads(result.output) == fixture("org.json")
 
 
 def test_nodes_list_reads_a_public_org(served: PublicAPI) -> None:
     result = runner.invoke(app, ["nodes", "list", "--org", ORG])
 
     assert result.exit_code == 0, result.output
-    assert f"Nodes in public org {ORG} (4)" in plain(result.output)
+    assert f"Nodes in public org {ORG} (6)" in plain(result.output)
     _no_token_sent(served)
 
 
@@ -81,7 +94,14 @@ def test_nodes_list_json_carries_every_node(served: PublicAPI) -> None:
 
     assert result.exit_code == 0, result.output
     titles = sorted(node["title"] for node in json.loads(result.output))
-    assert titles == ["Checkout API", "Ledger DB", "Payments", "Root"]
+    assert titles == [
+        "Auth / Sessions",
+        "Checkout API",
+        "Ledger DB",
+        "Payments",
+        "Root",
+        "Scratchpad",
+    ]
 
 
 def test_nodes_tree_reads_a_public_org(served: PublicAPI) -> None:
@@ -89,12 +109,17 @@ def test_nodes_tree_reads_a_public_org(served: PublicAPI) -> None:
 
     assert result.exit_code == 0, result.output
     lines = [line.strip("│├└─ ") for line in result.output.splitlines()]
-    assert lines[0] == f"Hierarchy in public org {ORG} (4)"
+    assert lines[0] == f"Hierarchy in public org {ORG} (6)"
+    # Ledger DB has two parents and appears under both; Scratchpad is
+    # attached to nothing, so it is a root beside Root.
     assert lines[1:] == [
         f"Root  {ROOT}",
+        f"Auth / Sessions  {AUTH}",
         f"Checkout API  {CHECKOUT}",
+        f"Ledger DB  {LEDGER}",
         f"Payments  {PAYMENTS}",
         f"Ledger DB  {LEDGER}",
+        f"Scratchpad  {SCRATCHPAD}",
     ]
     _no_token_sent(served)
 
@@ -103,7 +128,7 @@ def test_nodes_tree_json_is_the_graph(served: PublicAPI) -> None:
     result = runner.invoke(app, ["nodes", "tree", "--org", ORG, "--format", "json"])
 
     assert result.exit_code == 0, result.output
-    assert json.loads(result.output)["total_nodes"] == 4
+    assert json.loads(result.output)["total_nodes"] == 6
 
 
 def _drawn(tree: Tree) -> str:

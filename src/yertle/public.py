@@ -1,8 +1,8 @@
 """Reads of public organizations, without a token. Imported as `yertle.public`.
 
     >>> import yertle
-    >>> graph = yertle.public.graph("8f14e45f-...")
-    >>> print(graph.org_name, graph.total_nodes)
+    >>> org = yertle.public.get_org("8f14e45f-...")
+    >>> print(org.name, org.node_count)
 
 An organization marked public can be read by anyone, through the backend's
 `/public/orgs/...` routes. Everything here goes through an anonymous client
@@ -17,7 +17,7 @@ anonymous callers cannot probe which org ids exist. The 404 surfaces as
 Kept as its own module, rather than as a `public=True` flag on `yertle.orgs`
 and `yertle.nodes`, because the two surfaces are not the same shape. There is
 no public route for an org's hierarchy or for its search, and a public read
-returns less than a member's: no role, no invite settings.
+returns less than a member's: `get_org()` has no role or invite settings.
 """
 
 from __future__ import annotations
@@ -25,19 +25,48 @@ from __future__ import annotations
 from yertle_client.api.public import (
     get_public_org_graph_public_orgs_org_id_graph_get,
     get_public_org_nodes_public_orgs_org_id_nodes_get,
+    get_public_org_public_orgs_org_id_get,
     get_public_tree_document_public_orgs_org_id_nodes_node_id_tree_branch_get,
 )
-from yertle_client.models import NodeListResponse, NodeResponse, NodeTreeDocument, OrgGraphResponse
+from yertle_client.models import (
+    NodeListResponse,
+    NodeResponse,
+    NodeTreeDocument,
+    OrgGraphResponse,
+    PublicOrganizationResponse,
+)
 
 from yertle._client import anonymous_client
 from yertle._ids import wire_org_id
 from yertle._paging import PAGE_SIZE, all_nodes
 from yertle.nodes import DEFAULT_BRANCH
 
-__all__ = ["PARENT_CHILD", "get_node", "graph", "list_nodes"]
+__all__ = ["PARENT_CHILD", "get_node", "get_org", "graph", "list_nodes"]
 
 #: `GraphEdge.edge_type` for containment, as opposed to `"connection"`.
 PARENT_CHILD = "parent_child"
+
+
+def get_org(org_id: str) -> PublicOrganizationResponse:
+    """Fetch a public organization's details: name, description and counts.
+
+    The public counterpart of `yertle.orgs.get()`, and deliberately smaller.
+    The backend returns an allowlist (`id`, `name`, `description`,
+    `member_count`, `node_count`, `created_at`) and none of what only a
+    member should see: no role, no invite settings, no root node.
+
+        >>> org = yertle.public.get_org(org_id)
+        >>> print(f"{org.name}: {org.node_count} nodes, {org.member_count} members")
+
+    Raises `ValueError` if `org_id` is not a UUID.
+    """
+    response = get_public_org_public_orgs_org_id_get.sync(
+        client=anonymous_client(),
+        org_id=wire_org_id(org_id),
+    )
+    if not isinstance(response, PublicOrganizationResponse):
+        raise RuntimeError(f"Unexpected response from public.get_org({org_id!r}): {response!r}")
+    return response
 
 
 def graph(org_id: str) -> OrgGraphResponse:
@@ -48,9 +77,6 @@ def graph(org_id: str) -> OrgGraphResponse:
     drawn between two nodes on a canvas. The containment edges are the same
     hierarchy that `yertle.nodes.tree()` returns for a member, as edges
     rather than as paths.
-
-    The response also carries the org's name, which makes this the read for
-    an anonymous caller who wants to know what an org is called.
 
         >>> graph = yertle.public.graph(org_id)
         >>> contains = [e for e in graph.edges if e.edge_type == yertle.public.PARENT_CHILD]

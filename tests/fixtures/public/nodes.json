@@ -7,26 +7,24 @@
       "org_id": "00000000-0000-4000-8000-000000000002",
       "public_id": "root-00000001",
       "created_by": "user-1",
-      "created_by_email": "owner@example.com",
-      "created_at": "2026-11-23T23:25:21.624512-05:00",
+      "created_at": "2026-11-23T23:58:43.008094-05:00",
       "tags": {},
       "directories": [
         "/users/owner"
       ],
       "num_parents": 0,
-      "num_children": 2,
-      "num_descendants": 3,
+      "num_children": 3,
+      "num_descendants": 4,
       "num_ancestors": 0
     },
     {
       "id": "00000000-0000-4000-8000-000000000003",
-      "title": "Payments",
-      "description": "Charges cards and records refunds.",
+      "title": "Checkout API",
+      "description": "Takes orders from the storefront.",
       "org_id": "00000000-0000-4000-8000-000000000002",
-      "public_id": "payments-00000001",
+      "public_id": "checkout-api-00000001",
       "created_by": "user-1",
-      "created_by_email": "owner@example.com",
-      "created_at": "2026-11-23T23:25:25.220266-05:00",
+      "created_at": "2026-11-23T23:58:44.592939-05:00",
       "tags": {
         "team": {
           "value": "platform"
@@ -40,13 +38,12 @@
     },
     {
       "id": "00000000-0000-4000-8000-000000000004",
-      "title": "Ledger DB",
-      "description": "Postgres, append-only.",
+      "title": "Payments",
+      "description": "Charges cards and records refunds.",
       "org_id": "00000000-0000-4000-8000-000000000002",
-      "public_id": "ledger-db-00000001",
+      "public_id": "payments-00000001",
       "created_by": "user-1",
-      "created_by_email": "owner@example.com",
-      "created_at": "2026-11-23T23:25:27.108038-05:00",
+      "created_at": "2026-11-23T23:58:46.228024-05:00",
       "tags": {
         "team": {
           "value": "platform"
@@ -54,19 +51,37 @@
       },
       "directories": [],
       "num_parents": 1,
-      "num_children": 0,
-      "num_descendants": 0,
-      "num_ancestors": 2
+      "num_children": 1,
+      "num_descendants": 1,
+      "num_ancestors": 1
     },
     {
       "id": "00000000-0000-4000-8000-000000000005",
-      "title": "Checkout API",
-      "description": "Takes orders from the storefront.",
+      "title": "Ledger DB",
+      "description": "Postgres, append-only.",
       "org_id": "00000000-0000-4000-8000-000000000002",
-      "public_id": "checkout-api-00000001",
+      "public_id": "ledger-db-00000001",
       "created_by": "user-1",
-      "created_by_email": "owner@example.com",
-      "created_at": "2026-11-23T23:25:23.505956-05:00",
+      "created_at": "2026-11-23T23:58:47.603020-05:00",
+      "tags": {
+        "team": {
+          "value": "platform"
+        }
+      },
+      "directories": [],
+      "num_parents": 2,
+      "num_children": 0,
+      "num_descendants": 0,
+      "num_ancestors": 3
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000006",
+      "title": "Auth / Sessions",
+      "description": "A title with a slash in it.",
+      "org_id": "00000000-0000-4000-8000-000000000002",
+      "public_id": "auth-sessions-00000001",
+      "created_by": "user-1",
+      "created_at": "2026-11-23T23:58:49.227715-05:00",
       "tags": {
         "team": {
           "value": "platform"
@@ -77,9 +92,28 @@
       "num_children": 0,
       "num_descendants": 0,
       "num_ancestors": 1
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000007",
+      "title": "Scratchpad",
+      "description": "Never attached to anything.",
+      "org_id": "00000000-0000-4000-8000-000000000002",
+      "public_id": "scratchpad-00000001",
+      "created_by": "user-1",
+      "created_at": "2026-11-23T23:58:50.633580-05:00",
+      "tags": {
+        "team": {
+          "value": "platform"
+        }
+      },
+      "directories": [],
+      "num_parents": 0,
+      "num_children": 0,
+      "num_descendants": 0,
+      "num_ancestors": 0
     }
   ],
-  "total": 4,
+  "total": 6,
   "limit": 50,
   "offset": 0
 }
