@@ -180,6 +180,54 @@ def test_resolve_reports_missing_token_without_raising(
 
 
 # ---------------------------------------------------------------------------
+# Anonymous: no token is not an error, it is a public read
+# ---------------------------------------------------------------------------
+
+
+def test_anonymous_client_needs_no_token(
+    isolated_config: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The resolve() spec: a missing token means anonymous, and the URL still resolves."""
+    _clear_env(monkeypatch)
+    monkeypatch.setenv("YERTLE_API_URL", "http://localhost:8000")
+
+    with patch.object(auth_mod, "Client") as mock_factory:
+        auth_mod.get_anonymous_client()
+
+    mock_factory.assert_called_once_with(
+        base_url="http://localhost:8000",
+        raise_on_unexpected_status=True,
+    )
+
+
+def test_anonymous_client_follows_the_config_url(
+    isolated_config: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Same per-key chain as the authenticated client: a config URL with no token still counts."""
+    _clear_env(monkeypatch)
+    isolated_config.parent.mkdir(parents=True)
+    isolated_config.write_text(json.dumps({"api_url": "https://cfg.example"}))
+
+    assert auth_mod.get_anonymous_client()._base_url == "https://cfg.example"  # pyright: ignore[reportPrivateUsage]
+
+
+def test_anonymous_client_never_carries_a_resolved_token(
+    isolated_config: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A public read sends nothing, even when a token is available to send."""
+    _clear_env(monkeypatch)
+    monkeypatch.setenv("YERTLE_TOKEN", "yrt_abc")
+
+    client = auth_mod.get_anonymous_client()
+
+    assert not isinstance(client, auth_mod.AuthenticatedClient)
+    assert "Authorization" not in client.get_httpx_client().headers
+
+
+# ---------------------------------------------------------------------------
 # `save_credentials` — permissions, merging, atomicity
 # ---------------------------------------------------------------------------
 

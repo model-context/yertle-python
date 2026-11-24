@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 
+from tests._public_api import PublicAPI
+from tests._public_api import install as install_public_api
 from yertle import _client as _client_module
 from yertle.shared import auth
 
@@ -24,8 +26,10 @@ def reset_default_client() -> Iterator[None]:
     client another test built.
     """
     _client_module._default_client = None  # pyright: ignore[reportPrivateUsage]
+    _client_module._anonymous_client = None  # pyright: ignore[reportPrivateUsage]
     yield
     _client_module._default_client = None  # pyright: ignore[reportPrivateUsage]
+    _client_module._anonymous_client = None  # pyright: ignore[reportPrivateUsage]
 
 
 @pytest.fixture(autouse=True)
@@ -49,3 +53,23 @@ def isolate_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     assert not [k for k in os.environ if k.startswith("YERTLE_")], (
         "a YERTLE_* env var leaked into the test environment"
     )
+
+
+@pytest.fixture
+def token(monkeypatch: pytest.MonkeyPatch) -> str:
+    """Resolve a (fake) token, so commands take their authenticated path.
+
+    Without a token, read commands switch to the public routes. A test that
+    mocks the authenticated SDK call and forgets this would otherwise pass or
+    fail on the anonymous path instead — use it on any module that exercises
+    a member's view.
+    """
+    value = "yrt_test_token_for_the_suite"
+    monkeypatch.setenv(auth.TOKEN_ENV_VAR, value)
+    return value
+
+
+@pytest.fixture
+def public_api() -> PublicAPI:
+    """Serve captured `/public` responses to `yertle.public`. See `tests/_public_api.py`."""
+    return install_public_api()

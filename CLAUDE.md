@@ -24,7 +24,9 @@ if an invariant genuinely needs to change, change it deliberately and say why.
 1. **`shared/auth.py` is the only place credentials are resolved.** Nothing else
    reads `$YERTLE_TOKEN`, `$YERTLE_API_URL`, or `~/.yertle/config.json`. The SDK,
    CLI, and MCP server all go through it. The precedence chain is per-key and is
-   documented in `resolve()` — that docstring is the spec.
+   documented in `resolve()` — that docstring is the spec. A missing token is
+   not an error there: it means anonymous, and only `yertle/public.py` may use
+   the anonymous client, for `/public` routes only.
 2. **All subprocess execution goes through `sre/tools/_shell.py::run_cli`.** No
    direct `subprocess` calls elsewhere, never `shell=True`, no string
    interpolation into a command. `run_cli` is where the timeout, output

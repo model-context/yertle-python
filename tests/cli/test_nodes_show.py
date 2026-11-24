@@ -34,6 +34,9 @@ from yertle.cli.main import app
 
 runner = CliRunner()
 
+# A member's view: with no token these commands read the public routes instead.
+pytestmark = pytest.mark.usefixtures("token")
+
 ORG = "f586beac-7039-4f0c-9681-fd36293f071f"
 NODE = "09b27471-7aa2-4ff2-8f4e-ca62941f06df"
 _GET = "yertle.nodes._tree_document.sync"

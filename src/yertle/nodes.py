@@ -44,6 +44,7 @@ from yertle_client.models import (
 from yertle_client.types import UNSET, Unset
 
 from yertle._client import client
+from yertle._paging import PAGE_SIZE, all_nodes
 
 __all__ = [
     "ALL_ORGS",
@@ -63,10 +64,6 @@ ALL_ORGS = "all"
 #: Branch reads default here, matching the backend's own default branch name.
 DEFAULT_BRANCH = "main"
 
-# The endpoint's own default page size. Named because the loop below reasons
-# about it, not because it is configurable.
-_PAGE_SIZE = 50
-
 
 # `list` shadows the builtin inside this module — annotations reference
 # `builtins.list` explicitly, exactly as `orgs.py` does. The shadow is only
@@ -83,17 +80,7 @@ def list(org_id: str = ALL_ORGS) -> builtins.list[NodeResponse]:
 
     Raises `ValueError` if `org_id` is neither `"all"` nor a UUID.
     """
-    nodes: builtins.list[NodeResponse] = []
-    offset = 0
-    while True:
-        page = _fetch_page(org_id, offset=offset)
-        nodes.extend(page.nodes)
-        # Stop on a short or empty page as well as on the reported total: a
-        # total that never catches up would otherwise spin forever, and an
-        # empty page means there is nothing left regardless of what it says.
-        if not page.nodes or len(nodes) >= page.total:
-            return nodes
-        offset += len(page.nodes)
+    return all_nodes(lambda offset: _fetch_page(org_id, offset=offset))
 
 
 def _fetch_page(org_id: str, *, offset: int) -> NodeListResponse:
@@ -101,7 +88,7 @@ def _fetch_page(org_id: str, *, offset: int) -> NodeListResponse:
     if org_id == ALL_ORGS:
         response = list_all_nodes_across_orgs_orgs_all_nodes_get.sync(
             client=client(),
-            limit=_PAGE_SIZE,
+            limit=PAGE_SIZE,
             offset=offset,
         )
     else:
@@ -111,7 +98,7 @@ def _fetch_page(org_id: str, *, offset: int) -> NodeListResponse:
         response = list_nodes_orgs_org_id_nodes_get.sync(
             client=client(),
             org_id=UUID(org_id),
-            limit=_PAGE_SIZE,
+            limit=PAGE_SIZE,
             offset=offset,
         )
     if not isinstance(response, NodeListResponse):

@@ -1,0 +1,70 @@
+{
+  "expected_head_commit": "00000000-0000-4000-8000-000000000006",
+  "message": "",
+  "state": {
+    "node": {
+      "title": "Payments",
+      "description": "Charges cards and records refunds.",
+      "metadata": {}
+    },
+    "tags": {
+      "team": {
+        "value": "platform"
+      }
+    },
+    "directories": [],
+    "visual_properties": [
+      {
+        "child_node_id": "00000000-0000-4000-8000-000000000004",
+        "position_x": 100.0,
+        "position_y": 100.0,
+        "z_index": 1,
+        "width": 200.0,
+        "height": 100.0,
+        "rotation": 0.0,
+        "transparency": 1.0,
+        "show_border": true,
+        "title_position": "top-left",
+        "show_preview": false,
+        "_title": "Ledger DB",
+        "_description": "Postgres, append-only.",
+        "_snapshot_commit_id": "00000000-0000-4000-8000-000000000007"
+      }
+    ],
+    "connections": []
+  },
+  "status": {
+    "node_id": "00000000-0000-4000-8000-000000000003",
+    "org_id": "00000000-0000-4000-8000-000000000002",
+    "branch": "main",
+    "created_at": "2026-11-23T23:25:25.220266-05:00",
+    "parents": [
+      {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "title": "Root",
+        "description": ""
+      }
+    ],
+    "ingress": [
+      {
+        "connection_id": "00000000-0000-4000-8000-000000000008",
+        "from_node_id": "00000000-0000-4000-8000-000000000005",
+        "to_node_id": "00000000-0000-4000-8000-000000000003",
+        "label": "charges",
+        "connection_type": "default",
+        "connected_node": {
+          "title": "Checkout API",
+          "description": "Takes orders from the storefront."
+        }
+      }
+    ],
+    "egress": [],
+    "counts": {
+      "children": 1,
+      "connections": 0,
+      "parents": 1,
+      "ingress": 1,
+      "egress": 0
+    }
+  }
+}

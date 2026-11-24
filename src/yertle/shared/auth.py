@@ -1,11 +1,12 @@
-"""Credential resolution and authenticated client construction.
+"""Credential resolution and client construction.
 
 Single source of truth for:
 
 - The token + API URL precedence chain (`$YERTLE_TOKEN` env > `~/.yertle/config.json`
-  > raise `AuthError`; URL falls back to `$YERTLE_API_URL` > config > prod default).
+  > none; URL falls back to `$YERTLE_API_URL` > config > prod default).
 - Constructing a `yertle_client.AuthenticatedClient` configured the way the CLI,
-  MCP server, and SDK all expect.
+  MCP server, and SDK all expect, and the anonymous `Client` that reads public
+  organizations without a token.
 
 Consumers:
 - `yertle.cli.main` — uses `get_client`, `save_credentials`, `AuthError`,
@@ -13,8 +14,8 @@ Consumers:
   `yertle auth status`.
 - `yertle.mcp.server` — uses `resolve_credentials` (pure tuple-of-strings, no
   `AuthenticatedClient` needed since FastMCP wires its own `httpx.AsyncClient`).
-- `yertle._client` — uses `get_client` and `DEFAULT_API_URL` for the SDK's lazy
-  default-client singleton and `configure()`.
+- `yertle._client` — uses `get_client`, `get_anonymous_client` and
+  `DEFAULT_API_URL` for the SDK's lazy default clients and `configure()`.
 """
 
 from __future__ import annotations
@@ -26,13 +27,16 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from yertle_client.client import AuthenticatedClient
+from yertle_client.client import AuthenticatedClient, Client
 
 CONFIG_PATH = Path.home() / ".yertle" / "config.json"
 DEFAULT_API_URL = "https://api.yertle.com"
 
 TOKEN_ENV_VAR = "YERTLE_TOKEN"
 API_URL_ENV_VAR = "YERTLE_API_URL"
+
+#: What every surface says when a command needs a token and none resolved.
+NOT_AUTHENTICATED = f"Not authenticated. Run `yertle login` or set ${TOKEN_ENV_VAR}."
 
 # The config holds a bearer token, so it is owner-only — matching `gh`'s
 # hosts.yml and `~/.aws/credentials`. Set explicitly rather than inherited
@@ -169,6 +173,14 @@ def resolve() -> ResolvedCredentials:
     - **Token**: `$YERTLE_TOKEN` env > config file > `None` (`Source.MISSING`)
     - **API URL**: `$YERTLE_API_URL` env > config file > `DEFAULT_API_URL`
 
+    A missing token is not an error: it means **anonymous**. The URL resolves
+    either way, so a caller with no token can still read public organizations
+    through `get_anonymous_client()`. Whether anonymous is good enough is the
+    caller's decision, not this function's — anything that needs a token goes
+    through `resolve_credentials()`, which raises `AuthError`. Until anonymous
+    reads existed, "no token" meant "cannot proceed" everywhere, and this
+    docstring said so by omission.
+
     Because the keys resolve independently, a config-file token can pair with
     an env-var URL. That combination is legitimate (and the reason `yertle auth
     status` exists) but is also how a token issued by one backend ends up
@@ -208,9 +220,7 @@ def resolve_credentials() -> tuple[str, str]:
     """
     resolved = resolve()
     if resolved.token is None:
-        raise AuthError(
-            f"Not authenticated. Run `yertle login` or set ${TOKEN_ENV_VAR}.",
-        )
+        raise AuthError(NOT_AUTHENTICATED)
     return resolved.token, resolved.api_url
 
 
@@ -228,3 +238,18 @@ def get_client() -> AuthenticatedClient:
         token=token,
         raise_on_unexpected_status=True,
     )
+
+
+def get_anonymous_client() -> Client:
+    """Return a `Client` that sends no token, pointed at the resolved API URL.
+
+    For the `/public/...` routes, which serve organizations marked public to
+    anyone. It deliberately ignores a resolved token rather than attaching it:
+    those routes do not read one, and a request that carries no credential
+    cannot leak one to a backend it was not issued by.
+
+    Same `raise_on_unexpected_status=True` as `get_client()`. The public
+    routes answer 404 for an org that is private *or* does not exist, and the
+    CLI needs that 404 as an exception to explain it.
+    """
+    return Client(base_url=resolve().api_url, raise_on_unexpected_status=True)

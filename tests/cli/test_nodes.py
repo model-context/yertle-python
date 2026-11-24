@@ -18,6 +18,9 @@ from yertle.cli.main import app
 
 runner = CliRunner()
 
+# A member's view: with no token these commands read the public routes instead.
+pytestmark = pytest.mark.usefixtures("token")
+
 ORG = "8f14e45f-ceea-467a-9575-28db8d0dc4db"
 _ORG_SCOPED = "yertle.nodes.list_nodes_orgs_org_id_nodes_get.sync"
 _CROSS_ORG = "yertle.nodes.list_all_nodes_across_orgs_orgs_all_nodes_get.sync"

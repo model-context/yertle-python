@@ -22,6 +22,7 @@ import typer
 
 from yertle.cli._errors import die
 from yertle.nodes import ALL_ORGS
+from yertle.shared import auth
 from yertle.shared.auth import Source, configured_org
 
 ORG_ENV_VAR = "YERTLE_ORG"
@@ -158,15 +159,48 @@ def resolve_one_org(override: str | None, *, command: str) -> str:
     return org_id
 
 
+def anonymous() -> bool:
+    """True when no token resolves, so a read goes to the public routes.
+
+    Decided once per command, before any request. With a token the CLI keeps
+    to the authenticated routes even for a public org, so a member always
+    sees their own view of it (role, invite settings) rather than the public
+    one.
+    """
+    try:
+        return auth.resolve().token is None
+    except auth.AuthError as exc:
+        die(str(exc))
+
+
+def resolve_public_org(override: str | None) -> str:
+    """Resolve the one organization an anonymous read should target.
+
+    The chain's default is every org the caller belongs to, which means
+    nothing without a token — and nothing lists public orgs. So an anonymous
+    command that lands on 'all' fails with the usual message, plus the one
+    thing that would work instead.
+    """
+    org_id = resolve_org(override)
+    if org_id == ALL_ORGS:
+        die(
+            f"{auth.NOT_AUTHENTICATED}\n"
+            f"  Without a token you can still read a public organization: pass --org <id>.",
+        )
+    return org_id
+
+
 __all__ = [
     "ALL_ORGS",
     "ORG_ENV_VAR",
     "OrgOption",
     "ResolvedOrg",
     "SingleOrgOption",
+    "anonymous",
     "resolve_one_org",
     "resolve_org",
     "resolve_org_setting",
+    "resolve_public_org",
     "validate_node_id",
     "validate_org",
 ]

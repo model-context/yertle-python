@@ -1,0 +1,41 @@
+{
+  "entries": [
+    {
+      "node_id": "00000000-0000-4000-8000-000000000001",
+      "title": "Root",
+      "path": "/",
+      "depth": 0,
+      "is_directory": true,
+      "org_id": "00000000-0000-4000-8000-000000000002",
+      "org_name": null
+    },
+    {
+      "node_id": "00000000-0000-4000-8000-000000000003",
+      "title": "Payments",
+      "path": "/Root",
+      "depth": 1,
+      "is_directory": true,
+      "org_id": "00000000-0000-4000-8000-000000000002",
+      "org_name": null
+    },
+    {
+      "node_id": "00000000-0000-4000-8000-000000000005",
+      "title": "Checkout API",
+      "path": "/Root",
+      "depth": 1,
+      "is_directory": false,
+      "org_id": "00000000-0000-4000-8000-000000000002",
+      "org_name": null
+    },
+    {
+      "node_id": "00000000-0000-4000-8000-000000000004",
+      "title": "Ledger DB",
+      "path": "/Root/Payments",
+      "depth": 2,
+      "is_directory": false,
+      "org_id": "00000000-0000-4000-8000-000000000002",
+      "org_name": null
+    }
+  ],
+  "total": 4
+}

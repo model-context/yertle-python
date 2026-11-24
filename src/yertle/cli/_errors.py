@@ -98,8 +98,23 @@ def die(message: str) -> NoReturn:
     raise typer.Exit(code=1) from None
 
 
+def public_not_found_message() -> str:
+    """Explain a 404 from a `/public` route, which has two possible causes.
+
+    The backend answers 404 both for an id that does not exist and for an org
+    that exists but is private, on purpose, so the two cannot be told apart
+    from outside. The message therefore names both, and the way out of the
+    second: an org you are a member of is readable once you log in.
+    """
+    return (
+        f"Not found at {auth.resolve().api_url}, or not a public organization.\n"
+        f"  Without a token, only public organizations can be read. If this one "
+        f"is yours, run `yertle login` or set ${auth.TOKEN_ENV_VAR}."
+    )
+
+
 @contextmanager
-def api_errors() -> Iterator[None]:
+def api_errors(*, public: bool = False) -> Iterator[None]:
     """Translate credential and wire failures into a sentence plus exit 1.
 
         with api_errors():
@@ -108,6 +123,9 @@ def api_errors() -> Iterator[None]:
     Deliberately narrow: it catches the three ways an SDK call is expected to
     fail and nothing else, so a genuine bug still surfaces as a traceback
     rather than being flattened into a friendly message.
+
+    Pass `public=True` around a `yertle.public` call, so that a 404 is
+    explained as "not found, or not public" rather than as a bare status.
     """
     try:
         yield
@@ -120,6 +138,8 @@ def api_errors() -> Iterator[None]:
     except auth.AuthError as exc:
         die(str(exc))
     except UnexpectedStatus as exc:
+        if public and exc.status_code == HTTPStatus.NOT_FOUND:
+            die(public_not_found_message())
         die(api_error_message(exc))
     except RuntimeError as exc:
         # The SDK raises RuntimeError when a documented non-200 (a 422
@@ -127,4 +147,4 @@ def api_errors() -> Iterator[None]:
         die(f"Unexpected response from the API: {exc}")
 
 
-__all__ = ["api_error_message", "api_errors", "die"]
+__all__ = ["api_error_message", "api_errors", "die", "public_not_found_message"]

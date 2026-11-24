@@ -1,5 +1,6 @@
 """`yertle orgs` — work with organizations."""
 
+import json
 from typing import Annotated
 
 import typer
@@ -8,7 +9,7 @@ from yertle_client.models import OrganizationResponse
 from yertle_client.types import Unset
 
 import yertle
-from yertle.cli._context import ALL_ORGS, validate_org
+from yertle.cli._context import ALL_ORGS, anonymous, validate_org
 from yertle.cli._errors import api_errors, die
 from yertle.cli._render import (
     FORMAT_EPILOG,
@@ -144,9 +145,13 @@ def show_org(
     org_id: Annotated[str, typer.Argument(help="Organization id from `yertle orgs list`.")],
     fmt: FormatOption = Format.TABLE,
 ) -> None:
-    """Show an organization's details."""
+    """Show an organization's details. Works without a token for a public org."""
     if validate_org(org_id.strip()) == ALL_ORGS:
         die(f"`orgs show` needs one organization id, not '{ALL_ORGS}'.")
+
+    if anonymous():
+        _show_public_org(org_id.strip(), fmt)
+        return
 
     with api_errors():
         org = _merged(org_id.strip())
@@ -172,6 +177,33 @@ def show_org(
             ("Root node", _optional(org.root_node_id)),
         ],
     )
+
+
+def _show_public_org(org_id: str, fmt: Format) -> None:
+    """Show what an anonymous caller can learn about a public org.
+
+    Read from the org graph, which carries the org's name and every node.
+    The backend has a dedicated `/public/orgs/{id}` route with the
+    description and member count too, but the pinned `yertle-client` 0.4 has
+    no binding for it; switch to it when the pin moves.
+
+    The JSON keys are a subset of that route's response, under the same
+    names, so a script written against this output keeps working then.
+    """
+    with api_errors(public=True):
+        graph = yertle.public.graph(org_id)
+    name = graph.org_name if isinstance(graph.org_name, str) else org_id
+
+    if fmt is Format.JSON:
+        payload = {"id": org_id, "name": name, "node_count": graph.total_nodes}
+        typer.echo(json.dumps(payload, indent=2))
+        return
+
+    typer.echo(name)
+    typer.secho(org_id, dim=True)
+    typer.echo()
+    fields([("Nodes", str(graph.total_nodes)), ("Visibility", "public")])
+    typer.secho("\nRead without a token. Run `yertle login` to see your own orgs.", dim=True)
 
 
 @app.command("create")
