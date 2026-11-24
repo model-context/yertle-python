@@ -20,9 +20,15 @@ names. They are not written from memory.
 - `ambiguous_node_location.json`: the 409 from the signed-in lookup, which
   does list the candidates (auth has run, and every match is in one of the
   caller's own orgs).
-- `nonmember_locate_short.json`: a signed-in non-member's lookup of a short
-  id for a node in a public org: 404, since short ids match only in the
-  caller's own orgs.
+- `nonmember_locate_short.json`, `public_locate_short.json`: the lookup of a
+  short id for a node in a public org, by a signed-in non-member
+  (`GET /nodes/{short}`) and without a token (`GET /public/nodes/{short}`).
+  Both 200, captured from yertle#608, which matches short ids in public
+  orgs when the caller's own have no match. (Before it, the first was a 404
+  and the second took full ids only.)
+- `ambiguous_public_node_location.json`: the 409 for a short id shared by two
+  nodes in a public org, which lists them. Captured without a token; a
+  signed-in non-member got the identical body.
 - `unmatched_org.json`, `unmatched_node_location.json`,
   `unmatched_public_tree.json`: a prefix that matches nothing. The backend
   zero-pads it to a UUID that cannot exist, so these are exactly the 404s a

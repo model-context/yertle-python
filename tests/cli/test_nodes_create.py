@@ -15,6 +15,8 @@ from typer.testing import CliRunner
 from yertle_client.models import CreateNodeRequest, NodeResponse
 from yertle_client.types import UNSET, Unset
 
+from tests._orgs import LIST_ORGS as _LIST_ORGS
+from tests._orgs import OTHER_ORG, org_list
 from yertle.cli._context import ORG_ENV_VAR
 from yertle.cli.main import app
 
@@ -151,9 +153,42 @@ def test_create_rejects_a_malformed_tag(_client, sync) -> None:
     sync.assert_not_called()
 
 
+@patch(_CREATE, return_value=_created())
+@patch("yertle._client.get_client", return_value=object())
+def test_create_uses_your_only_org(_client, sync) -> None:
+    """One org is not a guess: with nothing named, it is the one meant."""
+    with patch(_LIST_ORGS, return_value=org_list(ORG)) as list_orgs:
+        result = runner.invoke(app, ["nodes", "create", "Checkout API"])
+    assert result.exit_code == 0, result.output
+    assert list_orgs.called
+    assert sync.call_args.kwargs["org_id"] == ORG
+
+
+@patch(_CREATE, return_value=_created())
+@patch("yertle._client.get_client", return_value=object())
+def test_create_with_a_named_org_lists_nothing(_client, sync) -> None:
+    with patch(_LIST_ORGS) as list_orgs:
+        result = runner.invoke(app, ["nodes", "create", "Checkout API", "--org", ORG])
+    assert result.exit_code == 0, result.output
+    assert not list_orgs.called
+
+
+@patch("yertle._client.get_client", return_value=object())
+def test_create_with_no_orgs_says_so(_client) -> None:
+    with patch(_LIST_ORGS, return_value=org_list()):
+        result = runner.invoke(app, ["nodes", "create", "Checkout API"])
+    assert result.exit_code == 1
+    assert "you belong to no organizations" in result.output
+
+
 @patch("yertle._client.get_client", return_value=object())
 def test_create_refuses_to_guess_the_organization(_client) -> None:
-    """Defaulting to 'all' is fine for a listing and wrong for a write."""
-    result = runner.invoke(app, ["nodes", "create", "Checkout API"])
+    """Defaulting to 'all' is fine for a listing and wrong for a write.
+
+    With one org there is nothing to guess (`test_one_org.py`); with several,
+    the command asks.
+    """
+    with patch(_LIST_ORGS, return_value=org_list(ORG, OTHER_ORG)):
+        result = runner.invoke(app, ["nodes", "create", "Checkout API"])
     assert result.exit_code == 1
-    assert "needs one organization" in result.output
+    assert "needs one organization, and you belong to 2 organizations" in result.output

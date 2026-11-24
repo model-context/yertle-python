@@ -8,7 +8,6 @@ from yertle_client.models import OrganizationResponse, PublicOrganizationRespons
 from yertle_client.types import Unset
 
 import yertle
-from yertle._ids import is_short_id
 from yertle.cli._context import (
     ALL_ORGS,
     anonymous,
@@ -22,13 +21,11 @@ from yertle.cli._render import (
     Column,
     Format,
     FormatOption,
-    display_path,
     dump_json,
     fields,
     render,
     short_id,
 )
-from yertle.shared import auth
 
 app = typer.Typer(
     name="orgs",
@@ -76,66 +73,20 @@ def list_orgs(fmt: FormatOption = Format.TABLE) -> None:
     )
 
 
-# The docstring's first line is what `yertle orgs` shows in its command list,
-# and the only place most people look, so it names 'all': that is what makes
-# the escape hatch discoverable rather than known only to readers of --help.
-#
-# A short id is resolved to the full one before it is saved. Stored as typed,
-# it would be resolved afresh by every later command, and could start meaning
-# a different org, or none, as orgs are created.
-@app.command("use")
+# Removed: a saved default org was state nobody could see, quietly narrowing
+# `nodes list` and `nodes tree`. Kept as a hidden command for one release so
+# muscle memory gets the replacement instead of "No such command".
+@app.command("use", hidden=True)
 def use_org(
-    org: Annotated[
-        str,
-        typer.Argument(
-            help=f"Organization id from `yertle orgs list` (a short id will do), or '{ALL_ORGS}'."
-        ),
-    ],
+    org: Annotated[str | None, typer.Argument(help="Ignored.")] = None,
 ) -> None:
-    """Set the default organization, or 'all' to clear it.
-
-    The default applies to commands that start from an organization: `nodes
-    list`, `nodes tree`, `nodes search` and `nodes create`. Commands that take
-    a node id (`nodes show`, `nodes delete`, `branches`, `prs`) look the
-    organization up from the node instead, so they work for any node you can
-    see, whatever the default.
-
-    Persists to ~/.yertle/config.json, so it survives between shells, the
-    same role `gcloud config set project` or `kubectl config use-context`
-    plays. `--org` and $YERTLE_ORG still win over it for one-off overrides.
-
-    Pass 'all' to go back to every organization, without hand-editing the
-    config file.
-    """
-    value = validate_org(org.strip())
-    name = None
-    if is_short_id(value):
-        value, name = _resolve_org(value)
-    auth.save_org(value)
-
-    where = display_path(auth.CONFIG_PATH)
-    if value == ALL_ORGS:
-        typer.echo(f"✓ Default organization cleared — commands will use every org ({where})")
-        return
-    named = f" ({name})" if name else ""
-    typer.echo(f"✓ Default organization set to {value}{named} ({where})")
-
-
-def _resolve_org(short: str) -> tuple[str, str]:
-    """Return the full id and name of the org a short id names.
-
-    The same read `orgs show` makes, so it works for exactly the orgs that
-    command can show: your own, and a public one, signed in or not.
-    """
-    if anonymous():
-        with api_errors(public=True):
-            public_org = yertle.public.get_org(short)
-        return public_org.id, public_org.name
-    with api_errors():
-        org, _ = member_or_public(
-            lambda: yertle.orgs.get(short), lambda: yertle.public.get_org(short)
-        )
-    return org.id, org.name
+    """Removed. Pass --org, or set $YERTLE_ORG."""
+    example = org.strip() if org and org.strip() != ALL_ORGS else "<id>"
+    die(
+        "`yertle orgs use` has been removed: there is no saved default organization.\n"
+        f"  Pass --org {example} to a command, or `export YERTLE_ORG={example}` for a shell.\n"
+        "  If you belong to one organization, `nodes search` and `nodes create` use it.",
+    )
 
 
 def _optional(value: object) -> str:
@@ -280,7 +231,7 @@ def create_org(
     root = org.root_node_id
     if root and not isinstance(root, Unset):
         console.print(f"[dim]  Root node {short_id(root)} — attach nodes to this one.[/dim]")
-    console.print(f"[dim]  Use it by default: yertle orgs use {short_id(org.id)}[/dim]")
+    console.print(f"[dim]  Use it with --org {short_id(org.id)}[/dim]")
 
 
 @app.command("update")

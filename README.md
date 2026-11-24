@@ -16,7 +16,7 @@ That puts `yertle` on your PATH:
 
 | | |
 |---|---|
-| Find your way around | `orgs list`, `orgs show`, `orgs use`, `nodes list`, `nodes tree` |
+| Find your way around | `orgs list`, `orgs show`, `nodes list`, `nodes tree` |
 | Inspect | `nodes show`, `nodes search`, `branches list`, `prs list`, `prs show` |
 | Change things | `orgs create`, `orgs update`, `nodes create`, `nodes apply`, `nodes delete`, `branches create`, `branches delete` |
 | Review | `prs create`, `prs merge`, `prs close` |
@@ -142,13 +142,19 @@ same reads are `yertle.public.get_org()`, `.list_nodes()`, `.hierarchy()`,
 Commands that take a node id — `nodes show`, `nodes delete`, and every
 `branches` and `prs` command — need no `--org`: they ask the backend which
 organization the node is in. If you pass `--org` or set `$YERTLE_ORG` anyway,
-it has to match, and a mismatch is an error naming both. The default set by
-`yertle orgs use` does not apply to them.
+it has to match, and a mismatch is an error naming both.
 
 Commands that start from an organization — `nodes list`, `nodes tree`,
-`nodes search`, `nodes create` — take it from `--org`, then `$YERTLE_ORG`,
-then `yertle orgs use`, then every org you belong to (where a command can
-span them). `yertle auth status` shows which source won for each.
+`nodes search`, `nodes create` — take it from `--org`, then `$YERTLE_ORG`.
+Without either, `nodes list` and `nodes tree` span every org you belong to,
+and `nodes search` and `nodes create` use your only org if you belong to just
+one, and otherwise ask. To work in one org for a while, `export
+YERTLE_ORG=<id>`. `yertle auth status` shows which source won.
+
+There is no saved default: `yertle orgs use` was removed, because a default
+nobody could see quietly narrowed `nodes list` and `nodes tree`. A config
+file that still holds one is cleaned up, with a one-line notice, the first
+time a command would have read it.
 
 ## Development
 

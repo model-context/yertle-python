@@ -19,6 +19,7 @@ from yertle_client.models import (
 )
 from yertle_client.types import UNSET
 
+from tests._orgs import CAPTURED_DETAIL, CAPTURED_SUMMARY
 from tests._output import plain as _cells
 from yertle.cli._context import ORG_ENV_VAR
 from yertle.cli.main import app
@@ -141,36 +142,23 @@ def isolated_config(tmp_path, monkeypatch: pytest.MonkeyPatch):
 ORG_ID = "8f14e45f-ceea-467a-9575-28db8d0dc4db"
 
 
-def test_orgs_use_persists_the_org(isolated_config) -> None:
-    result = runner.invoke(app, ["orgs", "use", ORG_ID])
-    assert result.exit_code == 0, result.output
-    assert ORG_ID in result.output
-    assert json.loads(isolated_config.read_text())["org"] == ORG_ID
-
-
-def test_orgs_use_all_resets(isolated_config) -> None:
-    runner.invoke(app, ["orgs", "use", ORG_ID])
-    result = runner.invoke(app, ["orgs", "use", "all"])
-    assert result.exit_code == 0, result.output
-    assert "every org" in result.output
-    assert json.loads(isolated_config.read_text())["org"] == "all"
-
-
-def test_orgs_use_rejects_a_malformed_id(isolated_config) -> None:
-    result = runner.invoke(app, ["orgs", "use", "acme-corp"])
+@pytest.mark.parametrize(("args", "example"), [([], "<id>"), ([ORG_ID], ORG_ID), (["all"], "<id>")])
+def test_orgs_use_is_removed_and_names_the_replacement(
+    isolated_config, args: list[str], example: str
+) -> None:
+    result = runner.invoke(app, ["orgs", "use", *args])
     assert result.exit_code == 1
-    assert "not an organization id" in result.output
-    assert not isolated_config.exists(), "a rejected id must not be written"
+    assert "`yertle orgs use` has been removed" in result.output
+    assert f"--org {example}" in result.output
+    assert f"YERTLE_ORG={example}" in result.output
+    assert not isolated_config.exists(), "it must not write the config file"
 
 
-def test_orgs_use_keeps_credentials(isolated_config) -> None:
-    """The whole risk of writing to this file is clobbering the token."""
-    auth_mod.save_credentials(api_url="https://api.example.test", token="yrt_secret")
-    runner.invoke(app, ["orgs", "use", ORG_ID])
-    stored = json.loads(isolated_config.read_text())
-    assert stored["token"] == "yrt_secret"
-    assert stored["api_url"] == "https://api.example.test"
-    assert stored["org"] == ORG_ID
+def test_orgs_use_is_not_listed(isolated_config) -> None:
+    """Hidden, so the group's help shows only what still works."""
+    result = runner.invoke(app, ["orgs", "--help"])
+    assert result.exit_code == 0
+    assert " use " not in _cells(result.output)
 
 
 # --- `yertle orgs show` ------------------------------------------------------
@@ -179,22 +167,8 @@ def test_orgs_use_keeps_credentials(isolated_config) -> None:
 # the point of the backfill: `/orgs/{id}` returns `invite_mode` but leaves
 # `role` and `member_count` null, while `/orgs` returns the opposite.
 
-_DETAIL = {
-    "id": ORG_ID,
-    "name": "Yertle",
-    "public_id": "yertle-befed489",
-    "created_at": "2026-04-15T00:52:23.240961+00:00",
-    "updated_at": "2026-05-02T18:46:09.342788+00:00",
-    "description": "The platform org.",
-    "invite_mode": "open",
-    "is_public": True,
-    "role": None,
-    "member_count": None,
-    "node_count": 13,
-    "root_node_id": "bbbff903-64a8-448e-a6c6-d3dfcfe4641f",
-}
-
-_SUMMARY = {**_DETAIL, "role": "owner", "member_count": 4, "invite_mode": None}
+_DETAIL = CAPTURED_DETAIL
+_SUMMARY = CAPTURED_SUMMARY
 
 _GET_ORG = "yertle.orgs.get_organization_orgs_org_id_get.sync"
 _LIST_ORGS = "yertle.orgs.list_organizations_orgs_get.sync"
@@ -311,22 +285,6 @@ def test_orgs_show_backfills_an_org_named_by_a_short_id(_get_client, get_org, _l
     assert result.exit_code == 0, result.output
     assert get_org.call_args.kwargs["org_id"] == ORG_ID[:8]
     assert "owner" in result.output
-
-
-def test_orgs_group_listing_mentions_how_to_clear() -> None:
-    """`yertle orgs` must name 'all' as the way out of a scoped default.
-
-    The group's command list is where someone scoped to one org actually looks
-    when they want every org back, and Typer builds it from the first line of
-    each docstring — so a well-meaning rewrite of that line silently removes
-    the only signpost. `--help` and `about` both document it, but neither is
-    on the path of a user who does not yet know the option exists.
-    """
-    result = runner.invoke(app, ["orgs"])
-    assert "all" in result.output, (
-        "`yertle orgs` no longer mentions 'all'; check the first line of "
-        "use_org's docstring, which Typer renders as the short help."
-    )
 
 
 @patch("yertle.orgs.create_organization_orgs_post.sync")

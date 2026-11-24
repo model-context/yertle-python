@@ -17,9 +17,9 @@ from yertle.sre.tools._shell import run_cli
 # Allowlisted (noun, verb) pairs — NOT bare nouns.
 #
 # Gating on the noun alone was safe only while every verb under it read. It
-# stopped being safe the moment `orgs use` landed: that writes the user's
-# config file, and an argv[0] check would have waved it straight through,
-# quietly breaking the read-only invariant in CLAUDE.md.
+# stopped being safe once `orgs` gained write verbs (`orgs create`, `orgs
+# update`): an argv[0] check would have waved them straight through, quietly
+# breaking the read-only invariant in CLAUDE.md.
 #
 # Must stay a subset of what the CLI actually implements — an earlier version
 # was copied from the Go CLI and advertised five commands this CLI never had,
@@ -75,8 +75,8 @@ def yertle_run(argv: list[str]) -> str:
     That is currently the whole read surface.
 
     Every call needs a noun AND a verb. Anything outside the allowed set is
-    refused — including write commands such as `orgs use`, which changes the
-    user's saved configuration.
+    refused — including write commands such as `orgs create` or `nodes
+    create`.
     """
     allowed = sorted(" ".join(pair) for pair in YERTLE_READ_COMMANDS)
     if len(argv) < _NOUN_VERB:

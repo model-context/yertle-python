@@ -40,7 +40,7 @@ from yertle_client.models import (
 )
 
 from yertle._client import anonymous_client
-from yertle._ids import full_id, wire_org_id
+from yertle._ids import wire_node_id, wire_org_id
 from yertle._paging import PAGE_SIZE, all_nodes
 from yertle.nodes import DEFAULT_BRANCH
 
@@ -151,15 +151,14 @@ def locate(node_id: str) -> NodeLocationResponse:
         >>> where = yertle.public.locate(node_id)
         >>> doc = yertle.public.get_node(node_id, org_id=where.org_id)
 
-    Full ids only: the backend matches short ids for members alone, so that
-    an anonymous caller cannot probe for nodes, and answers one here with a
-    404 indistinguishable from "no such node".
+    `node_id` may be a short id, matched against public organizations only.
+    Several matches are a 409 that lists them.
 
-    Raises `ValueError` if `node_id` is not a full UUID.
+    Raises `ValueError` if `node_id` is neither a UUID nor a short id.
     """
     response = get_public_node_location_public_nodes_node_id_get.sync(
         client=anonymous_client(),
-        node_id=full_id(node_id),
+        node_id=wire_node_id(node_id),
     )
     if not isinstance(response, NodeLocationResponse):
         raise RuntimeError(f"Unexpected response from public.locate({node_id!r}): {response!r}")

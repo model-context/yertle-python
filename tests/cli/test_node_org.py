@@ -25,7 +25,6 @@ from tests._public_api import (
 from yertle.cli._context import ORG_ENV_VAR
 from yertle.cli._errors import api_error_message
 from yertle.cli.main import app
-from yertle.shared import auth
 
 runner = CliRunner()
 
@@ -53,16 +52,6 @@ def test_no_org_anywhere_is_looked_up(api: PublicAPI) -> None:
     assert "Payments" in plain(result.output)
     assert _paths(api) == [LOOKUP, TREE]
     assert all(request.headers["authorization"] for request in api.requests)
-
-
-def test_the_lookup_beats_the_orgs_use_default(api: PublicAPI) -> None:
-    """The default points elsewhere; the node's own org is used, not an error."""
-    auth.save_org(PRIVATE_ORG)
-
-    result = runner.invoke(app, ["nodes", "show", PAYMENTS])
-
-    assert result.exit_code == 0, result.output
-    assert _paths(api) == [LOOKUP, TREE]
 
 
 @pytest.mark.parametrize("argv", [["--org", ORG], ["--org", "all"]])

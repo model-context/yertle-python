@@ -226,13 +226,13 @@ _DEFAULT_ORG = "8f14e45f-ceea-467a-9575-28db8d0dc4db"
 
 
 def test_status_says_node_commands_look_the_org_up(isolated_config: Path) -> None:
-    """Even with an `orgs use` default, which those commands do not read."""
+    """And an org saved by the old `orgs use` is not reported as in effect."""
     isolated_config.parent.mkdir(parents=True)
     isolated_config.write_text(json.dumps({"token": "cfg-token-long-enough", "org": _DEFAULT_ORG}))
 
     out = plain(runner.invoke(app, ["auth", "status"]).output)
 
-    assert f"Org {_DEFAULT_ORG} (from" in out
+    assert "Org all (default)" in out
     assert "Node org — (looked up from node)" in out
 
 

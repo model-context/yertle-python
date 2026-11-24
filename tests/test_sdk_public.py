@@ -186,10 +186,19 @@ def test_locate_of_a_private_or_missing_node_raises_404(public_api: PublicAPI) -
     assert excinfo.value.status_code == 404
 
 
-def test_locate_refuses_a_short_id_before_a_request(public_api: PublicAPI) -> None:
-    """The anonymous lookup takes full ids only: the backend 404s a short one."""
+def test_locate_sends_a_short_id_as_typed(public_api: PublicAPI) -> None:
+    """The backend matches it in public orgs (yertle#608); the SDK only lowercases it."""
+    public_api.serve(f"/public/nodes/{PAYMENTS[:8]}", fixture("node_location.json"))
+
+    where = yertle.public.locate(PAYMENTS[:8].upper())
+
+    assert where.node_id == PAYMENTS
+    assert [r.url.path for r in public_api.requests] == [f"/public/nodes/{PAYMENTS[:8]}"]
+
+
+def test_locate_refuses_a_malformed_id_before_a_request(public_api: PublicAPI) -> None:
     with pytest.raises(ValueError):
-        yertle.public.locate(PAYMENTS[:8])
+        yertle.public.locate(PAYMENTS[:7])
     assert public_api.requests == []
 
 

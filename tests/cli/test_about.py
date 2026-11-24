@@ -24,6 +24,8 @@ runner = CliRunner()
 def _registered_commands() -> set[str]:
     """Every invocable command, as the string a user would type after `yertle`."""
     names = {command.name for command in app.registered_commands if command.name}
+    # Hidden commands are kept only to point at their replacement
+    # (`orgs use`), so documenting them would advertise what is gone.
     for group in app.registered_groups:
         sub = group.typer_instance
         if sub is None:
@@ -31,7 +33,7 @@ def _registered_commands() -> set[str]:
         noun = group.name or sub.info.name
         if noun is None:
             continue
-        names |= {f"{noun} {c.name}" for c in sub.registered_commands if c.name}
+        names |= {f"{noun} {c.name}" for c in sub.registered_commands if c.name and not c.hidden}
     return names
 
 

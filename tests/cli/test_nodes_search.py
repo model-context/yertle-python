@@ -20,6 +20,8 @@ import pytest
 from typer.testing import CliRunner
 from yertle_client.models import RetrieveResponse
 
+from tests._orgs import LIST_ORGS as _LIST_ORGS
+from tests._orgs import OTHER_ORG, org_list
 from yertle.cli.main import app
 
 runner = CliRunner()
@@ -202,8 +204,19 @@ def test_search_rejects_an_unknown_expansion(_default_org) -> None:
     assert result.exit_code != 0
 
 
-def test_search_requires_a_single_org(monkeypatch: pytest.MonkeyPatch) -> None:
+@patch(_RETRIEVE, return_value=_response())
+@patch("yertle._client.get_client", return_value=object())
+def test_search_uses_your_only_org(_client, sync) -> None:
+    with patch(_LIST_ORGS, return_value=org_list(ORG)):
+        result = runner.invoke(app, ["nodes", "search", "q"])
+    assert result.exit_code == 0, result.output
+    assert sync.call_args.kwargs["org_id"] == ORG
+
+
+@patch("yertle._client.get_client", return_value=object())
+def test_search_requires_a_single_org(_client, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("YERTLE_ORG", "all")
-    result = runner.invoke(app, ["nodes", "search", "q"])
+    with patch(_LIST_ORGS, return_value=org_list(ORG, OTHER_ORG)):
+        result = runner.invoke(app, ["nodes", "search", "q"])
     assert result.exit_code == 1
-    assert "needs one organization" in result.output
+    assert "needs one organization, and you belong to 2 organizations" in result.output
