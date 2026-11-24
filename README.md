@@ -131,7 +131,9 @@ yertle nodes show <node-id>
 ```
 
 Every other command still needs `yertle login`. Once you are logged in, these
-commands read through your membership instead, as before. From Python, the
+commands read through your membership instead, as before. If you are logged in
+but not a member of a public organization, they fall back to its public routes
+and say so on stderr. From Python, the
 same reads are `yertle.public.get_org()`, `.list_nodes()`, `.hierarchy()`,
 `.get_node()` and `.locate()`.
 

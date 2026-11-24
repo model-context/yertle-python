@@ -25,6 +25,8 @@ from yertle.cli._context import (
     OrgOption,
     SingleOrgOption,
     anonymous,
+    member_or_public,
+    public_fallback_hint,
     resolve_node_org,
     resolve_one_org,
     resolve_org,
@@ -86,33 +88,41 @@ ORG_COLUMN: Column[NodeResponse] = Column(
 def list_nodes(org: OrgOption = None, fmt: FormatOption = Format.TABLE) -> None:
     """List nodes in an organization, or across every org you belong to.
 
-    Without a token, lists a public organization named with --org.
+    Without a token, lists a public organization named with --org. So does a
+    signed-in caller who is not a member of it.
     """
+    fell_back = False
     if anonymous():
-        public_org = resolve_public_org(org)
+        org_id = resolve_public_org(org)
         with api_errors(public=True):
-            public_nodes = yertle.public.list_nodes(public_org)
-        render(
-            public_nodes,
-            fmt=fmt,
-            columns=BASE_COLUMNS,
-            title=f"Nodes in public org {public_org} ({len(public_nodes)})",
-        )
-        return
-
-    org_id = resolve_org(org)
-
-    with api_errors():
-        nodes = yertle.nodes.list(org_id)
+            nodes = yertle.public.list_nodes(org_id)
+        public = True
+    else:
+        org_id = resolve_org(org)
+        with api_errors():
+            if org_id == yertle.nodes.ALL_ORGS:
+                nodes = yertle.nodes.list(org_id)
+            else:
+                nodes, fell_back = member_or_public(
+                    lambda: yertle.nodes.list(org_id), lambda: yertle.public.list_nodes(org_id)
+                )
+        public = fell_back
 
     across_orgs = org_id == yertle.nodes.ALL_ORGS
-    scope = "all organizations" if across_orgs else f"org {org_id}"
+    if public:
+        scope = f"public org {org_id}"
+    elif across_orgs:
+        scope = "all organizations"
+    else:
+        scope = f"org {org_id}"
     render(
         nodes,
         fmt=fmt,
         columns=[*BASE_COLUMNS, ORG_COLUMN] if across_orgs else BASE_COLUMNS,
         title=f"Nodes in {scope} ({len(nodes)})",
     )
+    if fell_back:
+        public_fallback_hint()
 
 
 _ROOT = "/"
@@ -208,8 +218,10 @@ def _build_tree(entries: list[HierarchyEntryResponse], label: str) -> Tree:
 def tree_nodes(org: OrgOption = None, fmt: FormatOption = Format.TABLE) -> None:
     """Show the containment hierarchy — what contains what.
 
-    Without a token, shows a public organization named with --org.
+    Without a token, shows a public organization named with --org. So does a
+    signed-in caller who is not a member of it.
     """
+    fell_back = False
     if anonymous():
         org_id = resolve_public_org(org)
         scope = f"public org {org_id}"
@@ -219,17 +231,23 @@ def tree_nodes(org: OrgOption = None, fmt: FormatOption = Format.TABLE) -> None:
         org_id = resolve_org(org)
         scope = "all organizations" if org_id == yertle.nodes.ALL_ORGS else f"org {org_id}"
         with api_errors():
-            entries = yertle.nodes.tree(org_id)
+            if org_id == yertle.nodes.ALL_ORGS:
+                entries = yertle.nodes.tree(org_id)
+            else:
+                entries, fell_back = member_or_public(
+                    lambda: yertle.nodes.tree(org_id), lambda: yertle.public.hierarchy(org_id)
+                )
+        if fell_back:
+            scope = f"public org {org_id}"
 
     if fmt is Format.JSON:
         dump_json(entries)
-        return
-
-    if not entries:
+    elif not entries:
         typer.echo("No nodes found.")
-        return
-
-    Console().print(_build_tree(entries, f"Hierarchy in {scope} ({len(entries)})"))
+    else:
+        Console().print(_build_tree(entries, f"Hierarchy in {scope} ({len(entries)})"))
+    if fell_back:
+        public_fallback_hint()
 
 
 def _section(console: Console, title: str, count: int | None = None) -> None:
@@ -362,7 +380,8 @@ def show_node(
     """Show a node's details — tags, parents, children and connections.
 
     The organization is looked up from the node. Works without a token for a
-    node in a public organization.
+    node in a public organization, and for one you are signed in to but not a
+    member of.
     """
     public = anonymous()
     org_id = resolve_node_org(node_id, org, public=public).value
@@ -372,7 +391,12 @@ def show_node(
             doc = yertle.public.get_node(node_id, org_id=org_id, branch=branch)
     else:
         with api_errors():
-            doc = yertle.nodes.get(node_id, org_id=org_id, branch=branch)
+            doc, fell_back = member_or_public(
+                lambda: yertle.nodes.get(node_id, org_id=org_id, branch=branch),
+                lambda: yertle.public.get_node(node_id, org_id=org_id, branch=branch),
+            )
+        if fell_back:
+            public_fallback_hint()
 
     if fmt is Format.JSON:
         dump_json(doc)

@@ -5,7 +5,10 @@ backend — an org created for the purpose, marked public, and read with no
 token — then scrubbed of real ids and names. They are not written from memory.
 Those named `*_member` were read from the same org by its owner, with a token;
 `node_location_private.json` is the owner's lookup of a node in a second,
-private org.
+private org. `forbidden_*.json` are what a signed-in non-member got from the
+member routes of a public org: `forbidden_org.json` from `GET /orgs/{id}`,
+`forbidden_org_route.json` from the routes under it (`/nodes`, `/hierarchy`,
+`.../tree/{branch}`). The two bodies really do differ.
 
 Serving them through an `httpx.MockTransport`, rather than patching the
 generated `.sync` functions, keeps the real bindings in the loop: the URL each

@@ -4,11 +4,17 @@ from typing import Annotated
 
 import typer
 from rich.console import Console
-from yertle_client.models import OrganizationResponse
+from yertle_client.models import OrganizationResponse, PublicOrganizationResponse
 from yertle_client.types import Unset
 
 import yertle
-from yertle.cli._context import ALL_ORGS, anonymous, validate_org
+from yertle.cli._context import (
+    ALL_ORGS,
+    anonymous,
+    member_or_public,
+    public_fallback_hint,
+    validate_org,
+)
 from yertle.cli._errors import api_errors, die
 from yertle.cli._render import (
     FORMAT_EPILOG,
@@ -154,12 +160,21 @@ def show_org(
     if validate_org(org_id.strip()) == ALL_ORGS:
         die(f"`orgs show` needs one organization id, not '{ALL_ORGS}'.")
 
+    org_id = org_id.strip()
     if anonymous():
-        _show_public_org(org_id.strip(), fmt)
+        with api_errors(public=True):
+            public_org = yertle.public.get_org(org_id)
+        _show_public_org(
+            public_org, fmt, note="Read without a token. Run `yertle login` to see your own orgs."
+        )
         return
 
     with api_errors():
-        org = _merged(org_id.strip())
+        org, _ = member_or_public(lambda: _merged(org_id), lambda: yertle.public.get_org(org_id))
+    if isinstance(org, PublicOrganizationResponse):
+        _show_public_org(org, fmt)
+        public_fallback_hint()
+        return
 
     if fmt is Format.JSON:
         dump_json(org)
@@ -184,11 +199,14 @@ def show_org(
     )
 
 
-def _show_public_org(org_id: str, fmt: Format) -> None:
-    """Show what the public route returns about an org: less than a member sees."""
-    with api_errors(public=True):
-        org = yertle.public.get_org(org_id)
+def _show_public_org(
+    org: PublicOrganizationResponse, fmt: Format, *, note: str | None = None
+) -> None:
+    """Show what the public route returns about an org: less than a member sees.
 
+    `note` closes the table view only, so `--format json` stays exactly the
+    backend's response.
+    """
     if fmt is Format.JSON:
         dump_json(org)
         return
@@ -205,7 +223,8 @@ def _show_public_org(org_id: str, fmt: Format) -> None:
             ("Visibility", "public"),
         ],
     )
-    typer.secho("\nRead without a token. Run `yertle login` to see your own orgs.", dim=True)
+    if note:
+        typer.secho(f"\n{note}", dim=True)
 
 
 @app.command("create")
