@@ -6,21 +6,19 @@ Served from responses captured against a real backend (see
 an empty temp path.
 """
 
-import io
 import json
 from pathlib import Path
-from typing import Any
 from unittest.mock import patch
 
+import httpx
 import pytest
-from rich.console import Console
-from rich.tree import Tree
 from typer.testing import CliRunner
-from yertle_client.models import HierarchyResponse, OrgGraphResponse
+from yertle_client.client import AuthenticatedClient
 
 from tests._output import plain
 from tests._public_api import (
     AUTH,
+    BASE_URL,
     CHECKOUT,
     LEDGER,
     ORG,
@@ -30,10 +28,7 @@ from tests._public_api import (
     PublicAPI,
     fixture,
 )
-from yertle.cli.commands.nodes import (  # pyright: ignore[reportPrivateUsage]
-    _build_tree,
-    _graph_tree,
-)
+from yertle import _client as _client_module
 from yertle.cli.main import app
 from yertle.shared import auth
 
@@ -45,7 +40,7 @@ NOT_AUTHENTICATED = "Not authenticated. Run `yertle login` or set $YERTLE_TOKEN.
 @pytest.fixture
 def served(public_api: PublicAPI) -> PublicAPI:
     public_api.serve(f"/public/orgs/{ORG}", fixture("org.json"))
-    public_api.serve(f"/public/orgs/{ORG}/graph", fixture("graph.json"))
+    public_api.serve(f"/public/orgs/{ORG}/hierarchy", fixture("hierarchy.json"))
     public_api.serve(f"/public/orgs/{ORG}/nodes", fixture("nodes.json"))
     public_api.serve(
         f"/public/orgs/{ORG}/nodes/{PAYMENTS}/tree/main",
@@ -110,7 +105,8 @@ def test_nodes_tree_reads_a_public_org(served: PublicAPI) -> None:
 
     assert result.exit_code == 0, result.output
     lines = [line.strip("│├└─ ") for line in result.output.splitlines()]
-    assert lines[0] == f"Hierarchy in public org {ORG} (6)"
+    # Seven entries for six nodes: Ledger DB has a row per parent.
+    assert lines[0] == f"Hierarchy in public org {ORG} (7)"
     # Ledger DB has two parents and appears under both; Scratchpad is
     # attached to nothing, so it is a root beside Root.
     assert lines[1:] == [
@@ -125,54 +121,28 @@ def test_nodes_tree_reads_a_public_org(served: PublicAPI) -> None:
     _no_token_sent(served)
 
 
-def test_nodes_tree_json_is_the_public_graph_unchanged(served: PublicAPI) -> None:
-    """Pinned on purpose: anonymously this is NOT the member `/hierarchy` shape.
+def test_nodes_tree_json_is_what_a_member_gets(
+    served: PublicAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Captured from one org, anonymously and by its owner: the output must not differ."""
+    anonymous = runner.invoke(app, ["nodes", "tree", "--org", ORG, "--format", "json"])
+    assert anonymous.exit_code == 0, anonymous.output
+    _no_token_sent(served)
 
-    The README and `nodes tree --help` say so. If a public hierarchy route
-    lands and this switches to entries, that is a visible change for scripts
-    and this test should change with the docs, not quietly.
-    """
-    result = runner.invoke(app, ["nodes", "tree", "--org", ORG, "--format", "json"])
-
-    assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
-    assert set(payload) == {"nodes", "edges", "org_name", "total_nodes", "total_edges"}
-    assert payload == fixture("graph.json")
-    member_shape: Any = fixture("hierarchy_same_org.json")
-    assert payload != member_shape["entries"]
-
-
-def _drawn(tree: Tree) -> str:
-    console = Console(width=200, record=True, file=io.StringIO())
-    console.print(tree)
-    return console.export_text()
-
-
-def test_the_public_tree_matches_a_members_tree_of_the_same_org() -> None:
-    """Both captures are of the same org: the graph read anonymously, the
-    hierarchy read by its owner. Built from either, the tree must agree."""
-    graph = OrgGraphResponse.from_dict(fixture("graph.json"))  # type: ignore[arg-type]
-    hierarchy = HierarchyResponse.from_dict(fixture("hierarchy_same_org.json"))  # type: ignore[arg-type]
-
-    assert _drawn(_graph_tree(graph, "label")) == _drawn(_build_tree(hierarchy.entries, "label"))
-
-
-def test_graph_tree_survives_a_cycle_with_no_root() -> None:
-    graph = OrgGraphResponse.from_dict(
-        {
-            "nodes": [{"id": "a", "title": "A"}, {"id": "b", "title": "B"}],
-            "edges": [
-                {"source": "a", "target": "b", "edge_type": "parent_child"},
-                {"source": "b", "target": "a", "edge_type": "parent_child"},
-                {"source": "a", "target": "b", "edge_type": "connection"},
-            ],
-            "total_nodes": 2,
-            "total_edges": 3,
-        },
+    served.serve(f"/orgs/{ORG}/hierarchy", fixture("hierarchy_member.json"))
+    _client_module._default_client = AuthenticatedClient(  # pyright: ignore[reportPrivateUsage]
+        base_url=BASE_URL,
+        token="yrt_member",
+        raise_on_unexpected_status=True,
+        httpx_args={"transport": httpx.MockTransport(served.handle)},
     )
-    text = _drawn(_graph_tree(graph, "label"))
-    assert "A  a" in text
-    assert "B  b" in text
+    monkeypatch.setenv(auth.TOKEN_ENV_VAR, "yrt_member")
+    member = runner.invoke(app, ["nodes", "tree", "--org", ORG, "--format", "json"])
+    assert member.exit_code == 0, member.output
+    assert served.requests[-1].url.path == f"/orgs/{ORG}/hierarchy"
+
+    assert member.output == anonymous.output
 
 
 def test_nodes_show_reads_a_public_node(served: PublicAPI) -> None:
@@ -203,6 +173,7 @@ def test_a_private_or_missing_org_explains_itself(public_api: PublicAPI, argv: l
     out = plain(result.output)
     assert "Not found at https://api.yertle.com, or not a public organization." in out
     assert "yertle login" in out
+    _no_token_sent(public_api)
 
 
 @pytest.mark.parametrize("command", ["list", "tree"])
@@ -260,10 +231,10 @@ def test_a_corrupt_config_is_a_sentence_not_a_traceback(
 
 
 def test_an_empty_public_org_says_so(public_api: PublicAPI) -> None:
-    empty = {"nodes": [], "edges": [], "total_nodes": 0, "total_edges": 0, "org_name": "Empty"}
-    public_api.serve(f"/public/orgs/{ORG}/graph", empty)
+    public_api.serve(f"/public/orgs/{ORG}/hierarchy", {"entries": [], "total": 0})
 
     result = runner.invoke(app, ["nodes", "tree", "--org", ORG])
 
     assert result.exit_code == 0, result.output
     assert "No nodes found." in result.output
+    _no_token_sent(public_api)

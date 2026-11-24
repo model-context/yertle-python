@@ -43,7 +43,10 @@ dependencies = [
     # still validates full UUIDs itself; see `yertle/_ids.py`. The floor is
     # 0.5.1 because 0.5.0 is unimportable: it was generated with `import
     # httpx2` while declaring `httpx`.
-    "yertle-client>=0.5.1,<0.6.0",
+    #
+    # 0.6.x adds `GET /public/orgs/{id}/hierarchy`, an anonymous caller's
+    # read of a public org's hierarchy in the member route's shape.
+    "yertle-client>=0.6.0,<0.7.0",
     # typer + rich are base, not an extra, so `uv tool install yertle` gives a
     # working CLI. They used to sit behind [cli], which made the most natural
     # install command fail with an ImportError traceback — the package is named

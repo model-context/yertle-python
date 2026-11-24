@@ -129,14 +129,9 @@ yertle nodes tree --org <org-id>
 yertle nodes show <node-id> --org <org-id>
 ```
 
-One difference to know if you script against it: `nodes tree --format json`
-without a token prints the org's public graph (`nodes`, `edges`, `org_name`,
-`total_nodes`, `total_edges`), not the hierarchy entry list you get when
-logged in. The backend has no public hierarchy route yet.
-
 Every other command still needs `yertle login`. Once you are logged in, these
 commands read through your membership instead, as before. From Python, the
-same reads are `yertle.public.get_org()`, `.graph()`, `.list_nodes()` and
+same reads are `yertle.public.get_org()`, `.list_nodes()`, `.hierarchy()` and
 `.get_node()`.
 
 ## Development
