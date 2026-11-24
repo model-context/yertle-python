@@ -117,11 +117,11 @@ def list_nodes(org: OrgOption = None, fmt: FormatOption = Format.TABLE) -> None:
 
     across_orgs = org_id == yertle.nodes.ALL_ORGS
     if public:
-        scope = f"public org {org_id}"
+        scope = f"public org {short_id(org_id)}"
     elif across_orgs:
         scope = "all organizations"
     else:
-        scope = f"org {org_id}"
+        scope = f"org {short_id(org_id)}"
     render(
         nodes,
         fmt=fmt,
@@ -231,12 +231,14 @@ def tree_nodes(org: OrgOption = None, fmt: FormatOption = Format.TABLE) -> None:
     fell_back = False
     if anonymous():
         org_id = resolve_public_org(org)
-        scope = f"public org {org_id}"
+        scope = f"public org {short_id(org_id)}"
         with api_errors(public=True):
             entries = yertle.public.hierarchy(org_id)
     else:
         org_id = resolve_org(org)
-        scope = "all organizations" if org_id == yertle.nodes.ALL_ORGS else f"org {org_id}"
+        scope = (
+            "all organizations" if org_id == yertle.nodes.ALL_ORGS else f"org {short_id(org_id)}"
+        )
         with api_errors():
             if org_id == yertle.nodes.ALL_ORGS:
                 entries = yertle.nodes.tree(org_id)
@@ -245,7 +247,7 @@ def tree_nodes(org: OrgOption = None, fmt: FormatOption = Format.TABLE) -> None:
                     lambda: yertle.nodes.tree(org_id), lambda: yertle.public.hierarchy(org_id)
                 )
         if fell_back:
-            scope = f"public org {org_id}"
+            scope = f"public org {short_id(org_id)}"
 
     if fmt is Format.JSON:
         dump_json(entries)
@@ -318,14 +320,14 @@ def _render_related(console: Console, doc: NodeTreeDocument) -> None:
         _section(console, "Parents", len(parents))
         for parent in parents:
             entry = parent.to_dict()
-            console.print(f"  {entry.get('title', '')}  [dim]{entry.get('id', '')}[/dim]")
+            console.print(f"  {entry.get('title', '')}  [dim]{short_id(entry.get('id'))}[/dim]")
 
     children = _listed(doc.state.visual_properties)
     if children:
         _section(console, "Children", len(children))
         for child in children:
             title = child.field_title if not isinstance(child.field_title, Unset) else None
-            console.print(f"  {title or ''}  [dim]{child.child_node_id}[/dim]")
+            console.print(f"  {title or ''}  [dim]{short_id(child.child_node_id)}[/dim]")
 
 
 def _render_connections(console: Console, doc: NodeTreeDocument) -> None:
@@ -339,8 +341,8 @@ def _render_connections(console: Console, doc: NodeTreeDocument) -> None:
         return
     _section(console, "Connections between children", len(connections))
     for connection in connections:
-        source = connection.field_from_title or connection.from_child_id
-        target = connection.field_to_title or connection.to_child_id
+        source = connection.field_from_title or short_id(connection.from_child_id)
+        target = connection.field_to_title or short_id(connection.to_child_id)
         console.print(f"  {source} → {target}{_labelled(connection.label)}")
 
 
@@ -556,7 +558,8 @@ def search_nodes(
             node = nodes_by_id.get(match["node_id"], {})
             if text := (node.get("text_content") or "").strip():
                 console.print(
-                    f"\n[bold]{node.get('title', '')}[/bold]  [dim]{match['node_id']}[/dim]"
+                    f"\n[bold]{node.get('title', '')}[/bold]  "
+                    f"[dim]{short_id(match['node_id'])}[/dim]"
                 )
                 console.print(text)
 
@@ -718,7 +721,7 @@ def apply_node(
     console = Console()
     console.print(
         f"Applying to [bold]{current.state.node.title}[/bold] "
-        f"[dim]{node_id} · branch {branch}[/dim]"
+        f"[dim]{short_id(node_id)} · branch {branch}[/dim]"
     )
 
     # Drift is worth naming before the diff, because it changes what the
@@ -726,9 +729,9 @@ def apply_node(
     if current.expected_head_commit != document.expected_head_commit:
         die(
             f"The branch moved since this document was read.\n"
-            f"  document: {document.expected_head_commit}\n"
-            f"  current:  {current.expected_head_commit}\n"
-            f"  Re-read it with `yertle nodes show {node_id} --format json`, "
+            f"  document: {short_id(document.expected_head_commit)}\n"
+            f"  current:  {short_id(current.expected_head_commit)}\n"
+            f"  Re-read it with `yertle nodes show {short_id(node_id)} --format json`, "
             f"reapply the edit, and try again.",
         )
 
@@ -767,7 +770,7 @@ def _render_push_result(console: Console, result: PushStateResponse) -> None:
         console.print("[green]✓[/green] Already up to date — no commit created.")
         return
 
-    console.print(f"[green]✓[/green] Committed [bold]{result.commit_id}[/bold]")
+    console.print(f"[green]✓[/green] Committed [bold]{short_id(result.commit_id)}[/bold]")
     # The wire names predate yertle#431: there are no stored objects any more,
     # and the two fields now count entities added-or-modified and unchanged
     # against the branch head. "Entity" keeps this line from reading as a
@@ -779,7 +782,7 @@ def _render_push_result(console: Console, result: PushStateResponse) -> None:
     mappings = result.connection_id_mappings
     if mappings is not None and not isinstance(mappings, Unset):
         for temporary, real in (mappings.to_dict() or {}).items():
-            console.print(f"[dim]  connection {temporary} → {real}[/dim]")
+            console.print(f"[dim]  connection {temporary} → {short_id(real)}[/dim]")
 
     # The only signal that a typo was dropped: push stores what it knows and
     # ignores the rest, so a misspelled field fails silently without this.
@@ -825,7 +828,7 @@ def delete_node(
     counts = doc.status.counts
 
     console = Console()
-    console.print(f"[bold]{title}[/bold] [dim]{node_id}[/dim]")
+    console.print(f"[bold]{title}[/bold] [dim]{short_id(node_id)}[/dim]")
     console.print(
         f"[dim]  {counts.children} child(ren), {counts.parents} parent(s), "
         f"{counts.connections} connection(s) between children[/dim]"

@@ -23,6 +23,7 @@ from yertle.cli._render import (
     dump_json,
     fields,
     render,
+    short_id,
 )
 
 app = typer.Typer(
@@ -80,7 +81,7 @@ def list_prs(
         prs = yertle.prs.list(node_id, org_id=org_id, status=status)
 
     scope = f"{status} pull requests" if status else "Pull requests"
-    render(prs, fmt=fmt, columns=COLUMNS, title=f"{scope} on {node_id} ({len(prs)})")
+    render(prs, fmt=fmt, columns=COLUMNS, title=f"{scope} on {node.label()} ({len(prs)})")
 
 
 @app.command("show")
@@ -211,14 +212,14 @@ def merge_pr(
     # carries merged=true and this cannot currently fire. Kept so a backend
     # that starts reporting soft failures is not read as success. yertle#389.
     if not result.merged:
-        die(f"PR #{number} was not merged. Check `yertle prs show {node_id} {number}`.")
+        die(f"PR #{number} was not merged. Check `yertle prs show {short_id(node_id)} {number}`.")
     console.print(f"[green]✓[/green] Merged [bold]#{number}[/bold]")
     # Not a merge commit, despite the field's name: Yertle fast-forwards, so
     # this is the source branch's head that the target was advanced to. Saying
     # "merge commit" would send someone looking for a two-parent commit that
     # does not exist. Filed as yertle#389.
     if result.merge_commit:
-        console.print(f"[dim]  target fast-forwarded to {result.merge_commit}[/dim]")
+        console.print(f"[dim]  target fast-forwarded to {short_id(result.merge_commit)}[/dim]")
 
 
 @app.command("close")

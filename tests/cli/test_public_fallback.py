@@ -54,8 +54,8 @@ READS = {
 # What each read shows once it has its data: proof it rendered the public view.
 SHOWS = {
     "orgs show": "Visibility",
-    "nodes list": f"Nodes in public org {ORG} (6)",
-    "nodes tree": f"Hierarchy in public org {ORG}",
+    "nodes list": f"Nodes in public org {ORG[:8]} (6)",
+    "nodes tree": f"Hierarchy in public org {ORG[:8]}",
     "nodes show": "Payments",
 }
 
@@ -132,7 +132,7 @@ def test_a_member_keeps_their_own_view_in_one_request(api: PublicAPI) -> None:
     result = runner.invoke(app, ["nodes", "tree", "--org", ORG])
 
     assert result.exit_code == 0, result.output
-    assert f"Hierarchy in org {ORG}" in plain(result.stdout)
+    assert f"Hierarchy in org {ORG[:8]}" in plain(result.stdout)
     assert PUBLIC_FALLBACK_HINT not in plain(result.output)
     assert _reads(api) == [(f"/orgs/{ORG}/hierarchy", True)]
 

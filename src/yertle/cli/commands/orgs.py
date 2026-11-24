@@ -219,7 +219,7 @@ def show_org(
             ("Nodes", _optional(org.node_count)),
             ("Invite mode", _optional(org.invite_mode)),
             ("Visibility", _visibility(org)),
-            ("Root node", _optional(org.root_node_id)),
+            ("Root node", short_id(org.root_node_id)),
         ],
     )
 
@@ -279,8 +279,8 @@ def create_org(
     console.print(f"[green]✓[/green] Created [bold]{org.name}[/bold]")
     root = org.root_node_id
     if root and not isinstance(root, Unset):
-        console.print(f"[dim]  Root node {root} — attach nodes to this one.[/dim]")
-    console.print(f"[dim]  Use it by default: yertle orgs use {org.id}[/dim]")
+        console.print(f"[dim]  Root node {short_id(root)} — attach nodes to this one.[/dim]")
+    console.print(f"[dim]  Use it by default: yertle orgs use {short_id(org.id)}[/dim]")
 
 
 @app.command("update")
@@ -318,4 +318,4 @@ def update_org(
         for label, value in (("name", name), ("description", description))
         if value is not None
     ]
-    console.print(f"[dim]  {' and '.join(changed)} changed · {org.id}[/dim]")
+    console.print(f"[dim]  {' and '.join(changed)} changed · {short_id(org.id)}[/dim]")

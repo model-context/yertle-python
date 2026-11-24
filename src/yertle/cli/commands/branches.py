@@ -64,7 +64,7 @@ def list_branches(
         branches,
         fmt=fmt,
         columns=COLUMNS,
-        title=f"Branches on {node_id} ({len(branches)})",
+        title=f"Branches on {node.label()} ({len(branches)})",
     )
 
 
@@ -96,7 +96,7 @@ def create_branch(
 
     console = Console()
     console.print(f"[green]✓[/green] Created branch [bold]{branch.name}[/bold] from {base}")
-    console.print(f"[dim]  at {branch.head_commit}[/dim]")
+    console.print(f"[dim]  at {short_id(branch.head_commit)}[/dim]")
 
 
 @app.command("delete")
