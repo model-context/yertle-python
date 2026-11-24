@@ -1,0 +1,16 @@
+{
+  "branches": [
+    {
+      "node_id": "ab7bd00e-0000-4000-8000-000000000002",
+      "name": "main",
+      "head_commit": "00000000-0000-4000-8000-0000000000aa",
+      "base_branch": null,
+      "created_by": "local-dev-user-bbb",
+      "created_at": "2026-11-21T13:52:02.876602-05:00",
+      "updated_at": "2026-11-21T13:52:02.876602-05:00",
+      "head_commit_message": "Initial commit",
+      "last_activity": "2026-11-21T13:52:02.876602-05:00"
+    }
+  ],
+  "total": 1
+}

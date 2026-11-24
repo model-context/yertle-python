@@ -112,14 +112,16 @@ def test_nodes_tree_reads_a_public_org(served: PublicAPI) -> None:
     assert lines[0] == f"Hierarchy in public org {ORG} (7)"
     # Ledger DB has two parents and appears under both; Scratchpad is
     # attached to nothing, so it is a root beside Root.
+    # Ids are short in the tree, as in every table (#60). These fixtures'
+    # ids all begin 00000000, so the titles carry the structure here.
     assert lines[1:] == [
-        f"Root  {ROOT}",
-        f"Auth / Sessions  {AUTH}",
-        f"Checkout API  {CHECKOUT}",
-        f"Ledger DB  {LEDGER}",
-        f"Payments  {PAYMENTS}",
-        f"Ledger DB  {LEDGER}",
-        f"Scratchpad  {SCRATCHPAD}",
+        f"Root  {ROOT[:8]}",
+        f"Auth / Sessions  {AUTH[:8]}",
+        f"Checkout API  {CHECKOUT[:8]}",
+        f"Ledger DB  {LEDGER[:8]}",
+        f"Payments  {PAYMENTS[:8]}",
+        f"Ledger DB  {LEDGER[:8]}",
+        f"Scratchpad  {SCRATCHPAD[:8]}",
     ]
     _no_token_sent(served)
 

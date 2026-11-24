@@ -81,7 +81,7 @@ def list(org_id: str = ALL_ORGS) -> builtins.list[NodeResponse]:
     needed, add `nodes.iter()` beside this rather than making every caller
     page by hand.
 
-    Raises `ValueError` if `org_id` is neither `"all"` nor a UUID.
+    Raises `ValueError` if `org_id` is not `"all"`, a UUID or a short id.
     """
     return all_nodes(lambda offset: _fetch_page(org_id, offset=offset))
 
@@ -118,7 +118,7 @@ def tree(org_id: str = ALL_ORGS) -> builtins.list[HierarchyEntryResponse]:
     Unlike `list()` this endpoint does not paginate — it returns `entries` and
     `total` in one response — so there is no page loop to hide.
 
-    Raises `ValueError` if `org_id` is neither `"all"` nor a UUID.
+    Raises `ValueError` if `org_id` is not `"all"`, a UUID or a short id.
     """
     if org_id == ALL_ORGS:
         response = get_all_orgs_hierarchy_orgs_all_hierarchy_get.sync(client=client())
@@ -205,7 +205,12 @@ def locate(node_id: str) -> NodeLocationResponse:
     raised as `yertle_client.errors.UnexpectedStatus`; the backend does not
     say which. Without a token, use `yertle.public.locate()`.
 
-    Raises `ValueError` if `node_id` is not a UUID.
+    `node_id` may be a short id. It is matched only against nodes in
+    organizations you belong to, not public ones you don't, and several
+    matches are a 409 that lists them. The response always carries the full
+    `node_id`, so this is also how to turn a short id into a full one.
+
+    Raises `ValueError` if `node_id` is neither a UUID nor a short id.
     """
     response = locate_node_nodes_node_id_get.sync(client=client(), node_id=wire_node_id(node_id))
     if not isinstance(response, NodeLocationResponse):

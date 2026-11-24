@@ -19,6 +19,7 @@ from yertle_client.models import (
 from yertle_client.types import Unset
 
 import yertle
+from yertle._ids import is_short_id
 from yertle.cli._context import (
     NodeIdArgument,
     NodeOrgOption,
@@ -27,14 +28,22 @@ from yertle.cli._context import (
     anonymous,
     member_or_public,
     public_fallback_hint,
-    resolve_node_org,
+    resolve_node,
     resolve_one_org,
     resolve_org,
     resolve_public_org,
 )
 from yertle.cli._diff import diff_states, render_diff
 from yertle.cli._errors import api_errors, die
-from yertle.cli._render import FORMAT_EPILOG, Column, Format, FormatOption, dump_json, render
+from yertle.cli._render import (
+    FORMAT_EPILOG,
+    Column,
+    Format,
+    FormatOption,
+    dump_json,
+    render,
+    short_id,
+)
 
 app = typer.Typer(
     name="nodes",
@@ -64,7 +73,7 @@ def _count(value: Any) -> str:
 # to do here — it is the OpenAPI schema's default — but it means a 0 in these
 # two columns is slightly weaker evidence than a 0 in the other two.
 BASE_COLUMNS: list[Column[NodeResponse]] = [
-    Column("ID", lambda node: node.id, style="cyan", no_wrap=True),
+    Column("ID", lambda node: short_id(node.id), style="cyan", no_wrap=True),
     Column("Title", lambda node: node.title),
     Column("Children", lambda node: _count(node.num_children), justify="right"),
     Column("Descendants", lambda node: _count(node.num_descendants), justify="right"),
@@ -73,12 +82,10 @@ BASE_COLUMNS: list[Column[NodeResponse]] = [
 ]
 
 # Only worth a column when the listing spans orgs; when scoped it is the same
-# value on every row, and a second 36-character id squeezes the title off an
-# 80-column terminal. Short ids will make this cheaper once the id cache lands
-# for `nodes show` / `tree`.
+# value on every row.
 ORG_COLUMN: Column[NodeResponse] = Column(
     "Org",
-    lambda node: node.org_id,
+    lambda node: short_id(node.org_id),
     style="dim",
     no_wrap=True,
 )
@@ -161,7 +168,7 @@ def _add_branch(
     backend should never produce one, but an infinite recursion in a read-only
     display command is a bad way to find out.
     """
-    branch = tree.add(f"{entry.title}  [dim]{entry.node_id}[/dim]")
+    branch = tree.add(f"{entry.title}  [dim]{short_id(entry.node_id)}[/dim]")
     path = _full_path(entry)
     if not entry.is_directory or path in seen:
         return
@@ -210,7 +217,7 @@ def _build_tree(entries: list[HierarchyEntryResponse], label: str) -> Tree:
     # More than one org in play: give each its own branch, so identical paths
     # in different orgs cannot collide and the reader can tell them apart.
     for (org_id, org_name), org_entries in groups.items():
-        _attach(tree.add(f"[bold]{org_name}[/bold]  [dim]{org_id}[/dim]"), org_entries)
+        _attach(tree.add(f"[bold]{org_name}[/bold]  [dim]{short_id(org_id)}[/dim]"), org_entries)
     return tree
 
 
@@ -384,7 +391,8 @@ def show_node(
     member of.
     """
     public = anonymous()
-    org_id = resolve_node_org(node_id, org, public=public).value
+    node = resolve_node(node_id, org, public=public)
+    node_id, org_id = node.node_id, node.org.value
 
     if public:
         with api_errors(public=True):
@@ -441,7 +449,7 @@ MATCH_COLUMNS: builtins.list[Column[Any]] = [
     Column("Score", lambda m: f"{m['score']:.3f}"),
     Column("Title", lambda m: m["title"]),
     Column("Why", lambda m: m.get("match_reason") or "", style="dim"),
-    Column("ID", lambda m: m["node_id"], style="cyan", no_wrap=True),
+    Column("ID", lambda m: short_id(m["node_id"]), style="cyan", no_wrap=True),
 ]
 
 # The API only populates `path` on expanded results, so without --expand this
@@ -454,6 +462,22 @@ CONNECTION_COLUMNS: builtins.list[Column[Any]] = [
     Column("Edge", lambda c: c.get("label") or c.get("connection_type") or "", style="dim"),
     Column("To", lambda c: c.get("to_title") or "?"),
 ]
+
+
+def _full_node_id(node_id: str, *, org_id: str) -> str:
+    """Resolve a short node id to the full one, within `org_id`.
+
+    For an id bound for a request body, where the backend resolves nothing:
+    `scope.root_node_id` with a short id is a 400 ("must be a valid UUID").
+    A node's branches are the lightest read under `/orgs/{org}/nodes/{id}`,
+    where the backend does resolve one, and each branch names its node by
+    full id. Resolved within the org being searched, so a short id cannot
+    reach a node in another org, matching the backend's own rule.
+    """
+    branches = yertle.branches.list(node_id, org_id=org_id)
+    if not branches:
+        die(f"No node {node_id!r} in organization {org_id}.")
+    return branches[0].node_id
 
 
 @app.command("search")
@@ -471,7 +495,7 @@ def search_nodes(
     ] = None,
     scope_root: Annotated[
         str | None,
-        typer.Option("--scope-root", help="Restrict to this node's subtree."),
+        typer.Option("--scope-root", help="Restrict to this node's subtree. A short id will do."),
     ] = None,
     dir_prefix: Annotated[
         str | None,
@@ -487,6 +511,8 @@ def search_nodes(
     org_id = resolve_one_org(org, command="nodes search")
 
     with api_errors():
+        if scope_root and is_short_id(scope_root.strip()):
+            scope_root = _full_node_id(scope_root.strip(), org_id=org_id)
         result = yertle.search.retrieve(
             query,
             org_id=org_id,
@@ -788,7 +814,8 @@ def delete_node(
     it. That check reads the main branch only, so a node attached on another
     branch is not protected by it.
     """
-    org_id = resolve_node_org(node_id, org).value
+    node = resolve_node(node_id, org)
+    node_id, org_id = node.node_id, node.org.value
 
     # Name what is being deleted before asking. A uuid in a confirmation
     # prompt is not something anyone can check.

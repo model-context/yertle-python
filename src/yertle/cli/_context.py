@@ -7,7 +7,7 @@ rather than being re-derived per command.
 There are two chains. A command that starts from an organization (`nodes
 list`, `nodes create`) resolves flag → env → config → every org. A command
 that takes a node id asks the backend which org the node is in, because the
-node already knows; see `resolve_node_org()`.
+node already knows; see `resolve_node()`.
 
 The chain mirrors how `shared/auth.py` resolves the token and API URL, because
 "which org" is the same kind of question as "which backend": per-key
@@ -27,9 +27,11 @@ from uuid import UUID
 
 import typer
 from yertle_client.errors import UnexpectedStatus
+from yertle_client.models import NodeLocationResponse
 
 import yertle
-from yertle.cli._errors import api_errors, die
+from yertle._ids import MIN_SHORT_ID, is_short_id
+from yertle.cli._errors import api_error_message, api_errors, die
 from yertle.nodes import ALL_ORGS
 from yertle.shared import auth
 from yertle.shared.auth import Source, configured_org
@@ -76,40 +78,46 @@ NodeOrgOption = Annotated[
 ]
 
 
-_UUID_LEN = 36
+def _is_id(value: str) -> bool:
+    """True for a full UUID or a short id (`yertle._ids.is_short_id`)."""
+    if is_short_id(value):
+        return True
+    try:
+        UUID(value)
+    except ValueError:
+        return False
+    return True
 
 
 def validate_node_id(value: str) -> str:
     """Return `value` if it is a usable node id, else exit with a hint.
 
-    Node ids are UUIDs and the backend accepts nothing else — a node's
-    `public_id` (`supabase`, `root-9e0aa98f`) 400s, verified 2026-09-23. So a
-    malformed id can be rejected here, before a request, with a message that
-    names the offending value.
+    A node id is a full UUID or a short id, the first 8 or more characters of
+    one, as git takes a short SHA (#60). Anything else is refused here, before
+    a request: a node's `public_id` (`supabase`, `root-9e0aa98f`) is not an
+    id, and a 7-character prefix is not one either, because the backend would
+    pass it through unresolved and answer 404, which reads as "no such node"
+    rather than "too short".
 
-    Without this the backend answers `400 badly formed hexadecimal UUID
-    string`, which does not say *which* of the ids in the request was wrong —
-    a branch command sends two — and reads like a server fault rather than a
-    typo. The length hint is there because the way this actually happens is a
-    truncated copy-paste.
+    This only checks the shape. Which node a short id means, and whether it
+    means just one, is the backend's answer; see `resolve_node()`.
     """
     stripped = value.strip()
-    try:
-        UUID(stripped)
-    except ValueError:
-        hint = ""
-        if len(stripped) != _UUID_LEN:
-            hint = f" (got {len(stripped)} characters, expected {_UUID_LEN} — truncated?)"
+    if not _is_id(stripped):
         die(
-            f"{value!r} is not a node id{hint}.\n"
-            f"  Node ids are UUIDs. Copy one from `yertle nodes list`.",
+            f"{value!r} is not a node id.\n"
+            f"  Pass a UUID, or at least its first {MIN_SHORT_ID} characters. "
+            f"Copy one from `yertle nodes list`.",
         )
     return stripped
 
 
 NodeIdArgument = Annotated[
     str,
-    typer.Argument(help="Node id from `yertle nodes list`.", callback=validate_node_id),
+    typer.Argument(
+        help=f"Node id from `yertle nodes list`, or its first {MIN_SHORT_ID}+ characters.",
+        callback=validate_node_id,
+    ),
 ]
 
 
@@ -146,17 +154,18 @@ def resolve_org_setting(override: str | None = None) -> ResolvedOrg:
 def validate_org(value: str) -> str:
     """Return `value` if it is a usable organization id, else exit with a hint.
 
-    Validating here means a typo fails with a sentence naming where to find a
-    real id, rather than as a `ValueError` from deep inside the SDK.
+    A full UUID or a short id, as for nodes. A short id is passed on as it
+    is: every org id the CLI sends goes in a path, where the backend resolves
+    it. Validating here means a typo fails with a sentence naming where to
+    find a real id, rather than as a `ValueError` from deep inside the SDK.
     """
     if value == ALL_ORGS:
         return ALL_ORGS
-    try:
-        UUID(value)
-    except ValueError:
+    if not _is_id(value):
         die(
             f"{value!r} is not an organization id.\n"
-            f"  Pass the id from `yertle orgs list`, or '{ALL_ORGS}' for every org.",
+            f"  Pass the id from `yertle orgs list` (its first {MIN_SHORT_ID} characters "
+            f"will do), or '{ALL_ORGS}' for every org.",
         )
     return value
 
@@ -172,7 +181,7 @@ def resolve_one_org(override: str | None, *, command: str) -> str:
     The default chain ends at `ALL_ORGS`, which suits a listing and cannot
     work for a command scoped to a single org. More than one command needs
     this; naming `command` keeps the error specific while the wording stays
-    in one place. Commands that take a node id use `resolve_node_org()`.
+    in one place. Commands that take a node id use `resolve_node()`.
     """
     org_id = resolve_org(override)
     if org_id == ALL_ORGS:
@@ -205,10 +214,31 @@ def explicit_node_org(override: str | None = None) -> ResolvedOrg | None:
     return ResolvedOrg(value, source)
 
 
-def resolve_node_org(node_id: str, override: str | None, *, public: bool = False) -> ResolvedOrg:
-    """Return the organization a command on `node_id` acts on, and where it came from.
+@dataclass(frozen=True, slots=True)
+class ResolvedNode:
+    """The node a command acts on, by its full id, and its organization.
 
-    Precedence:
+    `node_id` is always the full UUID, even when the caller typed a short id.
+    Resolving once, here, means nothing downstream has to know short ids
+    exist: not the output, which then names the node the way every response
+    does, and not the request bodies, where the backend resolves nothing.
+    """
+
+    node_id: str
+    org: ResolvedOrg
+
+
+def _names(given: str, full: str) -> bool:
+    """True if `given`, a full or short id, names the full id `full`."""
+    if is_short_id(given):
+        return full.lower().startswith(given.lower())
+    return UUID(given) == UUID(full)
+
+
+def resolve_node(node_id: str, override: str | None, *, public: bool = False) -> ResolvedNode:
+    """Return the node a command acts on, with its full id and organization.
+
+    Precedence for the organization:
 
     1. An org the caller named: `--org`, then `$YERTLE_ORG`.
     2. The node's own org, from the backend (`Source.LOOKUP`).
@@ -223,22 +253,83 @@ def resolve_node_org(node_id: str, override: str | None, *, public: bool = False
     needs a token, so a write with none fails as "Not authenticated" before
     any request. A node the caller cannot see is a 404 either way, explained
     as one by `api_errors`.
+
+    A short node id goes through the same lookup, which answers with the full
+    id, except where the lookup will not match one: the anonymous lookup takes
+    full ids only, and the signed-in one matches short ids only in the
+    caller's own orgs, so that neither can be used to probe for nodes. In
+    those two cases a named org stands in, and the id is resolved inside it,
+    through the org's public routes (`_resolve_in_public_org`).
     """
     named = explicit_node_org(override)
     if named is not None:
         validate_org(named.value)
-    with api_errors(public=public):
-        location = yertle.public.locate(node_id) if public else yertle.nodes.locate(node_id)
+    location = _locate(node_id, named, public=public)
+    if isinstance(location, ResolvedNode):
+        return location
     if named is None:
-        return ResolvedOrg(location.org_id, Source.LOOKUP)
-    if UUID(named.value) != UUID(location.org_id):
+        return ResolvedNode(location.node_id, ResolvedOrg(location.org_id, Source.LOOKUP))
+    if not _names(named.value, location.org_id):
         option = "--org" if named.source is Source.FLAG else f"${ORG_ENV_VAR}"
         die(
-            f"Node {node_id} is in organization {location.org_id} ({location.org_name}),\n"
+            f"Node {location.node_id} is in organization {location.org_id} "
+            f"({location.org_name}),\n"
             f"  not {named.value}, which came from {option}.\n"
             f"  Drop {option} and the node's own organization is used.",
         )
-    return ResolvedOrg(location.org_id, named.source)
+    return ResolvedNode(location.node_id, ResolvedOrg(location.org_id, named.source))
+
+
+def _locate(
+    node_id: str, named: ResolvedOrg | None, *, public: bool
+) -> NodeLocationResponse | ResolvedNode:
+    """Look the node up; for a short id the lookup cannot match, resolve it in `named`.
+
+    Returns the lookup's answer, or, when it came from the named org, the
+    node already resolved there, which needs no org check.
+    """
+    short = is_short_id(node_id)
+    if public and short:
+        if named is None:
+            die(
+                "Without a token, a short node id needs its organization.\n"
+                "  Pass --org <id>, use the full node id, or run `yertle login`.",
+            )
+        with api_errors(public=True):
+            return _resolve_in_public_org(node_id, named)
+
+    with api_errors(public=public):
+        try:
+            return yertle.public.locate(node_id) if public else yertle.nodes.locate(node_id)
+        except UnexpectedStatus as missing:
+            if not short or missing.status_code != HTTPStatus.NOT_FOUND:
+                raise
+            if named is None:
+                die(
+                    f"{api_error_message(missing)}\n"
+                    f"  A short id matches only nodes in organizations you belong to.\n"
+                    f"  For a node in a public organization, pass --org <id> or the full id.",
+                )
+            # Signed in, but the node is not in one of your orgs: perhaps it
+            # is in the public one you named. If not there either, the
+            # original 404 is the answer.
+            try:
+                return _resolve_in_public_org(node_id, named)
+            except UnexpectedStatus as public_failure:
+                if public_failure.status_code == HTTPStatus.NOT_FOUND:
+                    raise missing from None
+                raise
+
+
+def _resolve_in_public_org(node_id: str, named: ResolvedOrg) -> ResolvedNode:
+    """Resolve a short node id inside a named public organization.
+
+    The org-scoped public routes resolve a short node id within the org in
+    the path, for anyone. The node's document is the read that echoes both
+    full ids back; it costs a request a node lookup would have cost anyway.
+    """
+    status = yertle.public.get_node(node_id, org_id=named.value).status
+    return ResolvedNode(status.node_id, ResolvedOrg(status.org_id, named.source))
 
 
 def anonymous() -> bool:
@@ -326,13 +417,14 @@ __all__ = [
     "PUBLIC_FALLBACK_HINT",
     "NodeOrgOption",
     "OrgOption",
+    "ResolvedNode",
     "ResolvedOrg",
     "SingleOrgOption",
     "anonymous",
     "explicit_node_org",
     "member_or_public",
     "public_fallback_hint",
-    "resolve_node_org",
+    "resolve_node",
     "resolve_one_org",
     "resolve_org",
     "resolve_org_setting",

@@ -14,7 +14,7 @@ from yertle_client.models import BranchResponse
 from yertle_client.types import Unset
 
 import yertle
-from yertle.cli._context import NodeIdArgument, NodeOrgOption, resolve_node_org
+from yertle.cli._context import NodeIdArgument, NodeOrgOption, resolve_node
 from yertle.cli._errors import api_errors
 from yertle.cli._render import (
     FORMAT_EPILOG,
@@ -23,6 +23,7 @@ from yertle.cli._render import (
     FormatOption,
     dump_json,
     render,
+    short_id,
 )
 
 app = typer.Typer(
@@ -40,19 +41,9 @@ def _optional(value: object) -> str:
     return str(value)
 
 
-def _short(commit: str) -> str:
-    """Abbreviate a commit id the way git does in a listing.
-
-    The full id is 36 characters and this table already carries a branch
-    name and a message; `--format json` keeps the whole thing for anyone who
-    needs to pass it back.
-    """
-    return commit[:8] if commit else "—"
-
-
 COLUMNS: list[Column[BranchResponse]] = [
     Column("Branch", lambda b: b.name, style="cyan", no_wrap=True),
-    Column("Head", lambda b: _short(b.head_commit), no_wrap=True),
+    Column("Head", lambda b: short_id(b.head_commit), no_wrap=True),
     Column("Base", lambda b: _optional(b.base_branch)),
     Column("Last commit", lambda b: _optional(b.head_commit_message)),
 ]
@@ -63,7 +54,8 @@ def list_branches(
     node_id: NodeIdArgument, org: NodeOrgOption = None, fmt: FormatOption = Format.TABLE
 ) -> None:
     """List the branches on a node."""
-    org_id = resolve_node_org(node_id, org).value
+    node = resolve_node(node_id, org)
+    node_id, org_id = node.node_id, node.org.value
 
     with api_errors():
         branches = yertle.branches.list(node_id, org_id=org_id)
@@ -92,7 +84,8 @@ def create_branch(
     The branch starts at the base's head commit, so it is identical to the
     base until something is pushed to it.
     """
-    org_id = resolve_node_org(node_id, org).value
+    node = resolve_node(node_id, org)
+    node_id, org_id = node.node_id, node.org.value
 
     with api_errors():
         branch = yertle.branches.create(name, node_id=node_id, org_id=org_id, base_branch=base)
@@ -128,7 +121,8 @@ def delete_branch(
 
     `main` cannot be deleted.
     """
-    org_id = resolve_node_org(node_id, org).value
+    node = resolve_node(node_id, org)
+    node_id, org_id = node.node_id, node.org.value
 
     with api_errors():
         message = yertle.branches.delete(name, node_id=node_id, org_id=org_id, force=force)

@@ -13,7 +13,7 @@ from yertle_client.models import PullRequestResponse
 from yertle_client.types import Unset
 
 import yertle
-from yertle.cli._context import NodeIdArgument, NodeOrgOption, resolve_node_org
+from yertle.cli._context import NodeIdArgument, NodeOrgOption, resolve_node
 from yertle.cli._errors import api_errors, die
 from yertle.cli._render import (
     FORMAT_EPILOG,
@@ -73,7 +73,8 @@ def list_prs(
     fmt: FormatOption = Format.TABLE,
 ) -> None:
     """List a node's pull requests."""
-    org_id = resolve_node_org(node_id, org).value
+    node = resolve_node(node_id, org)
+    node_id, org_id = node.node_id, node.org.value
 
     with api_errors():
         prs = yertle.prs.list(node_id, org_id=org_id, status=status)
@@ -90,7 +91,8 @@ def show_pr(
     fmt: FormatOption = Format.TABLE,
 ) -> None:
     """Show one pull request, including whether it can merge."""
-    org_id = resolve_node_org(node_id, org).value
+    node = resolve_node(node_id, org)
+    node_id, org_id = node.node_id, node.org.value
 
     with api_errors():
         pr = yertle.prs.get(number, node_id=node_id, org_id=org_id)
@@ -160,7 +162,8 @@ def create_pr(
             "`prs create` needs a source branch.\n"
             "  Pass --source <branch>; see `yertle branches list <node-id>`.",
         )
-    org_id = resolve_node_org(node_id, org).value
+    node = resolve_node(node_id, org)
+    node_id, org_id = node.node_id, node.org.value
 
     with api_errors():
         pr = yertle.prs.create(
@@ -197,7 +200,8 @@ def merge_pr(
     created. If the target has diverged, the merge is refused and the
     source branch has to be rebased first.
     """
-    org_id = resolve_node_org(node_id, org).value
+    node = resolve_node(node_id, org)
+    node_id, org_id = node.node_id, node.org.value
 
     with api_errors():
         result = yertle.prs.merge(number, node_id=node_id, org_id=org_id)
@@ -224,7 +228,8 @@ def close_pr(
     org: NodeOrgOption = None,
 ) -> None:
     """Close a pull request without merging it."""
-    org_id = resolve_node_org(node_id, org).value
+    node = resolve_node(node_id, org)
+    node_id, org_id = node.node_id, node.org.value
 
     with api_errors():
         pr = yertle.prs.close(number, node_id=node_id, org_id=org_id)

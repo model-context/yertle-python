@@ -427,11 +427,14 @@ about partial failure.
 - `docs/todo/todo.txt` item 1 — `--format json` is not 1:1 with the backend
   response. Worth settling before write commands make round-tripping
   (read a state, edit it, push it back) a normal thing to do.
-- `docs/todo/todo.txt` item 2 — identifiers are raw UUIDs. Every command here
-  takes at least one id, and most take two.
+- #60 — every command takes a short id (8+ characters of a UUID) wherever it
+  takes an org or node id, and tables show ids that short. The backend
+  resolves them in paths; the CLI resolves a node to its full id once, in
+  `resolve_node()`, so nothing downstream sees a short id, and `orgs use`
+  stores the full id.
 - #62 — commands that take a node id no longer take an org as well: they look
   it up from the node (`GET /nodes/{id}`, or `/public/nodes/{id}` without a
   token). `--org` and `$YERTLE_ORG` become a check that must match, and the
-  `orgs use` default stops applying to them. Short id prefixes (#60) and an org
-  written into the argument (#61) extend the same resolver,
-  `resolve_node_org()` in `cli/_context.py`.
+  `orgs use` default stops applying to them. Short id prefixes (#60) extend
+  that resolver, now `resolve_node()` in `cli/_context.py`; an org written
+  into the argument (#61) would too.

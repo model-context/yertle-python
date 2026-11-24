@@ -9,7 +9,7 @@ import pytest
 import typer
 from yertle_client.errors import UnexpectedStatus
 
-from yertle.cli._errors import api_error_message, api_errors, die
+from yertle.cli._errors import ambiguous_id_message, api_error_message, api_errors, die
 from yertle.shared import auth
 
 
@@ -124,3 +124,32 @@ def test_api_errors_lets_a_clean_exit_through() -> None:
     with pytest.raises(typer.Exit) as excinfo, api_errors():
         die("bad --tag")
     assert excinfo.value.exit_code == 1
+
+
+@pytest.mark.parametrize(
+    ("status", "body"),
+    [
+        # A 409 that is not about a short id: the generic message handles it.
+        (409, b'{"detail": "Branch feature already exists"}'),
+        (409, b"not json"),
+        (409, b'["a list"]'),
+        (409, b'{"detail": [{"msg": "validation"}]}'),
+        # The ambiguous wording, but not a 409.
+        (
+            400,
+            b'{"detail": "Node ID prefix \'ab7bd00e\' matches more than one node. '
+            b'Use more characters, or the full ID."}',
+        ),
+    ],
+)
+def test_ambiguous_id_message_is_only_for_the_ambiguous_409(status: int, body: bytes) -> None:
+    assert ambiguous_id_message(UnexpectedStatus(status, body)) is None
+
+
+def test_any_other_409_keeps_the_generic_message(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(typer.Exit), api_errors():
+        raise UnexpectedStatus(409, b'{"detail": "Branch feature already exists"}')
+    err = capsys.readouterr().err
+    assert "409 from the API" in err
+    assert "Branch feature already exists" in err
+    assert "ambiguous" not in err

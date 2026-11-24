@@ -1,0 +1,41 @@
+{
+  "nodes": [
+    {
+      "id": "ab7bd00e-0000-4000-8000-000000000002",
+      "title": "Payments API",
+      "description": "demo",
+      "org_id": "dc047318-0000-4000-8000-000000000001",
+      "public_id": "payments-cf7afe",
+      "created_by": "local-dev-user-bbb",
+      "created_by_email": "dev@flowtest.dev",
+      "created_at": "2026-11-21T13:52:02.876602-05:00",
+      "tags": {},
+      "directories": [],
+      "num_parents": 0,
+      "num_children": 0,
+      "num_descendants": 0,
+      "num_ancestors": 0
+    },
+    {
+      "id": "0f1e2d3c-0000-4000-8000-000000000004",
+      "title": "Root",
+      "description": "",
+      "org_id": "dc047318-0000-4000-8000-000000000001",
+      "public_id": "root-412b1f81",
+      "created_by": "local-dev-user-bbb",
+      "created_by_email": "dev@flowtest.dev",
+      "created_at": "2026-11-21T13:52:02.732522-05:00",
+      "tags": {},
+      "directories": [
+        "/users/dev"
+      ],
+      "num_parents": 0,
+      "num_children": 0,
+      "num_descendants": 0,
+      "num_ancestors": 0
+    }
+  ],
+  "total": 2,
+  "limit": 50,
+  "offset": 0
+}
