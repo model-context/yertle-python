@@ -19,16 +19,16 @@
     },
     "tags": {
       "ARN": {
-        "value": "arn:aws:cloudfront::983601044828:distribution/EOI3LIXNA853O",
-        "link": "https://983601044828-zfbpm2s5.us-east-1.console.aws.amazon.com/cloudfront/v4/home?region=us-east-1#/distributions/EOI3LIXNA853O"
+        "value": "arn:aws:cloudfront::123456789012:distribution/E2EXAMPLE0001",
+        "link": "https://us-east-1.console.aws.amazon.com/cloudfront/v4/home?region=us-east-1#/distributions/E2EXAMPLE0001"
       },
       "GitHub": {
-        "value": "yertle",
-        "link": "https://github.com/albertcmiller1/yertle"
+        "value": "webapp",
+        "link": "https://github.com/example/webapp"
       },
       "IaC": {
         "value": "cloudfront.yaml",
-        "link": "https://github.com/albertcmiller1/yertle/blob/main/deployment/infrastructure/frontend/cloudfront.yml"
+        "link": "https://github.com/example/webapp/blob/main/infra/cloudfront.yml"
       }
     },
     "directories": [],

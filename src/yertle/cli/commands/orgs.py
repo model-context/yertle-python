@@ -76,6 +76,13 @@ def list_orgs(fmt: FormatOption = Format.TABLE) -> None:
     )
 
 
+# The docstring's first line is what `yertle orgs` shows in its command list,
+# and the only place most people look, so it names 'all': that is what makes
+# the escape hatch discoverable rather than known only to readers of --help.
+#
+# A short id is resolved to the full one before it is saved. Stored as typed,
+# it would be resolved afresh by every later command, and could start meaning
+# a different org, or none, as orgs are created.
 @app.command("use")
 def use_org(
     org: Annotated[
@@ -87,27 +94,18 @@ def use_org(
 ) -> None:
     """Set the default organization, or 'all' to clear it.
 
-    The first line is what `yertle orgs` shows in its command list, and it is
-    the only place most people will look. Naming 'all' there is the difference
-    between the escape hatch being discoverable and it existing only for
-    readers of `--help`.
-
     The default applies to commands that start from an organization: `nodes
     list`, `nodes tree`, `nodes search` and `nodes create`. Commands that take
     a node id (`nodes show`, `nodes delete`, `branches`, `prs`) look the
     organization up from the node instead, so they work for any node you can
     see, whatever the default.
 
-    Persists to ~/.yertle/config.json, so it survives between shells — the
+    Persists to ~/.yertle/config.json, so it survives between shells, the
     same role `gcloud config set project` or `kubectl config use-context`
     plays. `--org` and $YERTLE_ORG still win over it for one-off overrides.
 
-    Pass 'all' to go back to every organization; that is the way to undo a
-    previous choice without hand-editing the config file.
-
-    A short id is resolved to the full one before it is saved. Stored as
-    typed, it would be resolved afresh by every later command, and could
-    start meaning a different org, or none, as orgs are created.
+    Pass 'all' to go back to every organization, without hand-editing the
+    config file.
     """
     value = validate_org(org.strip())
     name = None

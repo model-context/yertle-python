@@ -48,7 +48,7 @@ _FLAT: dict[str, Any] = {
             "title": "API Gateway",
             "description": "HTTP API.",
             "path": [],
-            "tags": {"ARN": "arn:aws:apigateway:us-east-1::/apis/rrqsqdvqe5"},
+            "tags": {"ARN": "arn:aws:apigateway:us-east-1::/apis/a1b2c3d4e5"},
             "directories": [],
             "text_content": "Routes every public request.",
         },

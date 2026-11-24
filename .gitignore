@@ -225,3 +225,6 @@ __marimo__/
 
 # diff-cover markdown report (CI job-summary artifact)
 diff-coverage.md
+
+# Claude Code worktrees
+.claude/worktrees/
