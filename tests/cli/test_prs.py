@@ -9,7 +9,8 @@ as success.
 
 import datetime
 import json
-from unittest.mock import patch
+from collections.abc import Iterator
+from unittest.mock import MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
@@ -22,10 +23,13 @@ from yertle_client.models import (
 )
 
 from tests._output import plain
+from tests._public_api import location
 from yertle.cli._context import ORG_ENV_VAR
 from yertle.cli.main import app
 
 runner = CliRunner()
+
+LOCATE = "yertle.nodes.locate_node_nodes_node_id_get.sync"
 
 ORG = "8f14e45f-ceea-467a-9575-28db8d0dc4db"
 NODE = "11111111-2222-3333-4444-555555555555"
@@ -39,6 +43,13 @@ _CLOSE = "yertle.prs._close.sync"
 @pytest.fixture(autouse=True)
 def _no_ambient_org(monkeypatch: pytest.MonkeyPatch) -> None:  # pyright: ignore[reportUnusedFunction]
     monkeypatch.delenv(ORG_ENV_VAR, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _located() -> Iterator[MagicMock]:  # pyright: ignore[reportUnusedFunction]
+    """The node lookup every command here makes first, answering ORG."""
+    with patch(LOCATE, return_value=location(NODE, ORG)) as sync:
+        yield sync
 
 
 def _pr(

@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from tests._output import plain
 from yertle.cli.commands.auth import _mask_token
 from yertle.cli.commands.login import _web_url_for
 from yertle.cli.main import app
@@ -219,3 +220,27 @@ def test_login_stays_vague_when_the_web_url_is_not_derivable(
     assert result.exit_code == 0, result.output
     assert "Settings page of your" in result.output
     assert "/settings" not in result.output
+
+
+_DEFAULT_ORG = "8f14e45f-ceea-467a-9575-28db8d0dc4db"
+
+
+def test_status_says_node_commands_look_the_org_up(isolated_config: Path) -> None:
+    """Even with an `orgs use` default, which those commands do not read."""
+    isolated_config.parent.mkdir(parents=True)
+    isolated_config.write_text(json.dumps({"token": "cfg-token-long-enough", "org": _DEFAULT_ORG}))
+
+    out = plain(runner.invoke(app, ["auth", "status"]).output)
+
+    assert f"Org {_DEFAULT_ORG} (from" in out
+    assert "Node org — (looked up from node)" in out
+
+
+def test_status_shows_a_named_org_for_node_commands(
+    isolated_config: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("YERTLE_ORG", "not-validated-here")
+
+    out = plain(runner.invoke(app, ["auth", "status"]).output)
+
+    assert "Node org not-validated-here (from $YERTLE_ORG)" in out

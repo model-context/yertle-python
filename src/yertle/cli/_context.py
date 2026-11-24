@@ -4,6 +4,11 @@ Every org-scoped command asks the same question, from the same places, and
 should fail the same way when it can't get an answer — so the chain lives here
 rather than being re-derived per command.
 
+There are two chains. A command that starts from an organization (`nodes
+list`, `nodes create`) resolves flag → env → config → every org. A command
+that takes a node id asks the backend which org the node is in, because the
+node already knows; see `resolve_node_org()`.
+
 The chain mirrors how `shared/auth.py` resolves the token and API URL, because
 "which org" is the same kind of question as "which backend": per-key
 precedence, with the winning source reported so `yertle auth status` can
@@ -20,7 +25,8 @@ from uuid import UUID
 
 import typer
 
-from yertle.cli._errors import die
+import yertle
+from yertle.cli._errors import api_errors, die
 from yertle.nodes import ALL_ORGS
 from yertle.shared import auth
 from yertle.shared.auth import Source, configured_org
@@ -37,10 +43,10 @@ OrgOption = Annotated[
     ),
 ]
 
-# Not every command can span organizations. `nodes show`, `nodes search` and
-# `nodes create` each act on exactly one, and offering them an option value
-# they will refuse is worse than not offering it — the help page becomes a
-# claim the command does not honour.
+# Not every command can span organizations. `nodes search` and `nodes create`
+# each act on exactly one, and offering them an option value they will refuse
+# is worse than not offering it — the help page becomes a claim the command
+# does not honour.
 SingleOrgOption = Annotated[
     str | None,
     typer.Option(
@@ -48,6 +54,21 @@ SingleOrgOption = Annotated[
         "-o",
         help=f"Organization to act on. Defaults to ${ORG_ENV_VAR}, then "
         f"`yertle orgs use`. This command acts on one org, so 'all' is not valid.",
+    ),
+]
+
+
+# A command that takes a node id learns the org from the node, so `--org` is
+# optional there and only checked. The help says so, and says that `orgs use`
+# does not reach these commands, because that is the surprising part.
+NodeOrgOption = Annotated[
+    str | None,
+    typer.Option(
+        "--org",
+        "-o",
+        help=f"Organization the node is in. Looked up from the node when not given; "
+        f"if given, or ${ORG_ENV_VAR} is set, it must match. `yertle orgs use` "
+        f"does not apply.",
     ),
 ]
 
@@ -146,9 +167,9 @@ def resolve_one_org(override: str | None, *, command: str) -> str:
     """Resolve to exactly one organization, exiting if the answer is 'all'.
 
     The default chain ends at `ALL_ORGS`, which suits a listing and cannot
-    work for a command scoped to a single org. Three commands need this and
-    each had its own copy of the check and the message; naming `command` keeps
-    the error specific while the wording stays in one place.
+    work for a command scoped to a single org. More than one command needs
+    this; naming `command` keeps the error specific while the wording stays
+    in one place. Commands that take a node id use `resolve_node_org()`.
     """
     org_id = resolve_org(override)
     if org_id == ALL_ORGS:
@@ -157,6 +178,64 @@ def resolve_one_org(override: str | None, *, command: str) -> str:
             f"  Pass --org <id>, or set a default with `yertle orgs use <id>`.",
         )
     return org_id
+
+
+def explicit_node_org(override: str | None = None) -> ResolvedOrg | None:
+    """The organization the caller named for a command on a node, if any, unvalidated.
+
+    Only `--org` and `$YERTLE_ORG` count, decided before any request. The
+    `yertle orgs use` default does not: it is a standing choice for commands
+    that start from an org, and applying it here would turn every node
+    outside that org into a mismatch error. 'all' names no organization, so
+    it constrains nothing and the lookup decides.
+    """
+    # #61 puts an org written into the node argument itself first in line,
+    # ahead of the flag.
+    if value := (override or "").strip():
+        source = Source.FLAG
+    elif value := os.environ.get(ORG_ENV_VAR, "").strip():
+        source = Source.ENV
+    else:
+        return None
+    if value == ALL_ORGS:
+        return None
+    return ResolvedOrg(value, source)
+
+
+def resolve_node_org(node_id: str, override: str | None, *, public: bool = False) -> ResolvedOrg:
+    """Return the organization a command on `node_id` acts on, and where it came from.
+
+    Precedence:
+
+    1. An org the caller named: `--org`, then `$YERTLE_ORG`.
+    2. The node's own org, from the backend (`Source.LOOKUP`).
+
+    The node is looked up in both cases. A named org that is not the node's
+    is a mistake worth stopping on, naming both, rather than following the
+    node somewhere the caller did not ask to go. Checking it costs the same
+    one request that finding the org would.
+
+    Pass `public=True` when no token resolves, to look up through the
+    anonymous route; only reads can use the result. Without it, the lookup
+    needs a token, so a write with none fails as "Not authenticated" before
+    any request. A node the caller cannot see is a 404 either way, explained
+    as one by `api_errors`.
+    """
+    named = explicit_node_org(override)
+    if named is not None:
+        validate_org(named.value)
+    with api_errors(public=public):
+        location = yertle.public.locate(node_id) if public else yertle.nodes.locate(node_id)
+    if named is None:
+        return ResolvedOrg(location.org_id, Source.LOOKUP)
+    if UUID(named.value) != UUID(location.org_id):
+        option = "--org" if named.source is Source.FLAG else f"${ORG_ENV_VAR}"
+        die(
+            f"Node {node_id} is in organization {location.org_id} ({location.org_name}),\n"
+            f"  not {named.value}, which came from {option}.\n"
+            f"  Drop {option} and the node's own organization is used.",
+        )
+    return ResolvedOrg(location.org_id, named.source)
 
 
 def anonymous() -> bool:
@@ -193,10 +272,13 @@ def resolve_public_org(override: str | None) -> str:
 __all__ = [
     "ALL_ORGS",
     "ORG_ENV_VAR",
+    "NodeOrgOption",
     "OrgOption",
     "ResolvedOrg",
     "SingleOrgOption",
     "anonymous",
+    "explicit_node_org",
+    "resolve_node_org",
     "resolve_one_org",
     "resolve_org",
     "resolve_org_setting",

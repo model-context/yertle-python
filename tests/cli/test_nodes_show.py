@@ -21,18 +21,22 @@ Shapes in here that would have been guessed wrong:
 """
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
 from yertle_client.models import NodeTreeDocument
 
 from tests._output import plain
+from tests._public_api import location
 from yertle.cli._context import ORG_ENV_VAR
 from yertle.cli.main import app
 
 runner = CliRunner()
+
+LOCATE = "yertle.nodes.locate_node_nodes_node_id_get.sync"
 
 # A member's view: with no token these commands read the public routes instead.
 pytestmark = pytest.mark.usefixtures("token")
@@ -46,6 +50,13 @@ _FIXTURES = Path(__file__).parent.parent / "fixtures"
 @pytest.fixture(autouse=True)
 def _no_ambient_org(monkeypatch: pytest.MonkeyPatch) -> None:  # pyright: ignore[reportUnusedFunction]
     monkeypatch.delenv(ORG_ENV_VAR, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _located() -> Iterator[MagicMock]:  # pyright: ignore[reportUnusedFunction]
+    """The node lookup every command here makes first, answering ORG."""
+    with patch(LOCATE, return_value=location(NODE, ORG)) as sync:
+        yield sync
 
 
 def _doc(name: str = "tree_document_rich") -> NodeTreeDocument:
@@ -146,8 +157,11 @@ def test_show_passes_the_branch_through() -> None:
     assert sync.call_args.kwargs["branch"] == "feature-x"
 
 
-def test_show_refuses_to_guess_the_organization() -> None:
-    with patch("yertle._client.get_client", return_value=object()):
+def test_show_looks_the_organization_up_from_the_node() -> None:
+    with (
+        patch(_GET, return_value=_doc()) as sync,
+        patch("yertle._client.get_client", return_value=object()),
+    ):
         result = runner.invoke(app, ["nodes", "show", NODE])
-    assert result.exit_code == 1
-    assert "needs one organization" in result.output
+    assert result.exit_code == 0, result.output
+    assert sync.call_args.kwargs["org_id"] == ORG

@@ -23,6 +23,7 @@ member's: `get_org()` has no role or invite settings.
 from __future__ import annotations
 
 from yertle_client.api.public import (
+    get_public_node_location_public_nodes_node_id_get,
     get_public_org_hierarchy_public_orgs_org_id_hierarchy_get,
     get_public_org_nodes_public_orgs_org_id_nodes_get,
     get_public_org_public_orgs_org_id_get,
@@ -32,17 +33,18 @@ from yertle_client.models import (
     HierarchyEntryResponse,
     HierarchyResponse,
     NodeListResponse,
+    NodeLocationResponse,
     NodeResponse,
     NodeTreeDocument,
     PublicOrganizationResponse,
 )
 
 from yertle._client import anonymous_client
-from yertle._ids import wire_org_id
+from yertle._ids import wire_node_id, wire_org_id
 from yertle._paging import PAGE_SIZE, all_nodes
 from yertle.nodes import DEFAULT_BRANCH
 
-__all__ = ["get_node", "get_org", "hierarchy", "list_nodes"]
+__all__ = ["get_node", "get_org", "hierarchy", "list_nodes", "locate"]
 
 
 def get_org(org_id: str) -> PublicOrganizationResponse:
@@ -136,4 +138,25 @@ def get_node(node_id: str, *, org_id: str, branch: str = DEFAULT_BRANCH) -> Node
     )
     if not isinstance(response, NodeTreeDocument):
         raise RuntimeError(f"Unexpected response from public.get_node({node_id!r}): {response!r}")
+    return response
+
+
+def locate(node_id: str) -> NodeLocationResponse:
+    """Find which public organization a node belongs to, from the node's id alone.
+
+    The anonymous counterpart of `yertle.nodes.locate()`, and the same
+    response. It answers only for a node in a public organization: a private
+    one, and one that does not exist, are both a 404.
+
+        >>> where = yertle.public.locate(node_id)
+        >>> doc = yertle.public.get_node(node_id, org_id=where.org_id)
+
+    Raises `ValueError` if `node_id` is not a UUID.
+    """
+    response = get_public_node_location_public_nodes_node_id_get.sync(
+        client=anonymous_client(),
+        node_id=wire_node_id(node_id),
+    )
+    if not isinstance(response, NodeLocationResponse):
+        raise RuntimeError(f"Unexpected response from public.locate({node_id!r}): {response!r}")
     return response

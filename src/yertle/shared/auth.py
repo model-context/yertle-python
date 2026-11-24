@@ -61,6 +61,9 @@ class Source(StrEnum):
     Reported by `yertle auth status` so a user can see which of the two
     possible sources actually won for each key. Rendering (the `$YERTLE_TOKEN`
     / `~/.yertle/config.json` labels) belongs to the CLI, not here.
+
+    The CLI reuses it for the organization, which has one source no
+    credential does: `LOOKUP`, an org asked of the backend for a node id.
     """
 
     FLAG = "flag"
@@ -68,6 +71,7 @@ class Source(StrEnum):
     CONFIG = "config"
     DEFAULT = "default"
     MISSING = "missing"
+    LOOKUP = "lookup"
 
 
 @dataclass(frozen=True)

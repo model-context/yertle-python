@@ -9,6 +9,7 @@ import datetime
 from unittest.mock import patch
 
 import pytest
+from yertle_client.errors import UnexpectedStatus
 from yertle_client.models import (
     HierarchyEntryResponse,
     HierarchyResponse,
@@ -17,6 +18,7 @@ from yertle_client.models import (
 )
 
 import yertle
+from tests._public_api import PRIVATE_NODE, PRIVATE_ORG, PublicAPI, fixture, install_member
 
 
 def _node(node_id: str) -> NodeResponse:
@@ -157,3 +159,49 @@ def test_create_raises_on_an_unexpected_response(_get_client, sync) -> None:
     sync.return_value = None
     with pytest.raises(RuntimeError, match="Unexpected response"):
         yertle.nodes.create("New", org_id="8f14e45f-ceea-467a-9575-28db8d0dc4db")
+
+
+def test_locate_sends_the_token_and_returns_the_location(
+    public_api: PublicAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    install_member(public_api, "yrt_member")
+    public_api.serve(f"/nodes/{PRIVATE_NODE}", fixture("node_location_private.json"))
+
+    where = yertle.nodes.locate(PRIVATE_NODE.upper())
+
+    assert (where.org_id, where.org_name, where.title) == (
+        PRIVATE_ORG,
+        "Example private org",
+        "Billing worker",
+    )
+    (request,) = public_api.requests
+    # Canonicalised on the way out, the way org ids are.
+    assert request.url.path == f"/nodes/{PRIVATE_NODE}"
+    assert request.headers["authorization"] == "Bearer yrt_member"
+
+
+def test_locate_of_a_node_you_cannot_see_raises_404(public_api: PublicAPI) -> None:
+    install_member(public_api, "yrt_member")
+    public_api.serve(
+        f"/nodes/{PRIVATE_NODE}", fixture("not_found_node_location_member.json"), status=404
+    )
+
+    with pytest.raises(UnexpectedStatus) as excinfo:
+        yertle.nodes.locate(PRIVATE_NODE)
+    assert excinfo.value.status_code == 404
+
+
+def test_locate_refuses_a_short_id_before_a_request(public_api: PublicAPI) -> None:
+    """The backend matches prefixes with a token; the SDK takes full ids only, for now."""
+    install_member(public_api, "yrt_member")
+    with pytest.raises(ValueError):
+        yertle.nodes.locate(PRIVATE_NODE[:8])
+    assert public_api.requests == []
+
+
+def test_locate_raises_on_an_unexpected_response(public_api: PublicAPI) -> None:
+    install_member(public_api, "yrt_member")
+    public_api.serve(f"/nodes/{PRIVATE_NODE}", {"detail": []}, status=422)
+
+    with pytest.raises(RuntimeError, match=r"nodes\.locate"):
+        yertle.nodes.locate(PRIVATE_NODE)

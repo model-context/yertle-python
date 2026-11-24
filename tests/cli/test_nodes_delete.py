@@ -12,18 +12,22 @@ wrong in two senses, which is the same trap `nodes create` fell into with
 """
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
 from yertle_client.models import Deleted, DeletionResultResponse, NodeTreeDocument
 
 from tests._output import plain
+from tests._public_api import location
 from yertle.cli._context import ORG_ENV_VAR
 from yertle.cli.main import app
 
 runner = CliRunner()
+
+LOCATE = "yertle.nodes.locate_node_nodes_node_id_get.sync"
 
 ORG = "f586beac-7039-4f0c-9681-fd36293f071f"
 NODE = "09b27471-7aa2-4ff2-8f4e-ca62941f06df"
@@ -35,6 +39,13 @@ _FIXTURES = Path(__file__).parent.parent / "fixtures"
 @pytest.fixture(autouse=True)
 def _no_ambient_org(monkeypatch: pytest.MonkeyPatch) -> None:  # pyright: ignore[reportUnusedFunction]
     monkeypatch.delenv(ORG_ENV_VAR, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _located() -> Iterator[MagicMock]:  # pyright: ignore[reportUnusedFunction]
+    """The node lookup every command here makes first, answering ORG."""
+    with patch(LOCATE, return_value=location(NODE, ORG)) as sync:
+        yield sync
 
 
 def _doc() -> NodeTreeDocument:
@@ -121,11 +132,16 @@ def test_an_unsuccessful_result_is_a_failure() -> None:
     assert "Not deleted: still attached" in plain(result.output)
 
 
-def test_refuses_to_guess_the_organization() -> None:
-    with patch("yertle._client.get_client", return_value=object()):
-        result = runner.invoke(app, ["nodes", "delete", NODE])
-    assert result.exit_code == 1
-    assert "needs one organization" in result.output
+def test_looks_the_organization_up_from_the_node() -> None:
+    with (
+        patch(_GET, return_value=_doc()) as get,
+        patch(_DELETE, return_value=_deleted()) as delete,
+        patch("yertle._client.get_client", return_value=object()),
+    ):
+        result = runner.invoke(app, ["nodes", "delete", NODE, "--yes"])
+    assert result.exit_code == 0, result.output
+    assert get.call_args.kwargs["org_id"] == ORG
+    assert delete.call_args.kwargs["org_id"] == ORG
 
 
 def test_validates_the_node_id() -> None:

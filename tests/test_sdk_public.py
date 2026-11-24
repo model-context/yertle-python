@@ -157,3 +157,43 @@ def test_the_anonymous_client_is_built_from_resolved_settings(
 
     assert client._base_url == "http://localhost:8000"  # pyright: ignore[reportPrivateUsage]
     assert anonymous_client() is client
+
+
+def test_locate_reads_the_public_route_without_a_token(public_api: PublicAPI) -> None:
+    public_api.serve(f"/public/nodes/{PAYMENTS}", fixture("node_location.json"))
+
+    where = yertle.public.locate(PAYMENTS)
+
+    assert (where.node_id, where.org_id, where.org_name) == (PAYMENTS, ORG, "Example public org")
+    assert where.title == "Payments"
+    (request,) = public_api.requests
+    assert request.url.path == f"/public/nodes/{PAYMENTS}"
+    assert "authorization" not in request.headers
+
+
+def test_locate_is_the_member_response_for_a_public_node() -> None:
+    """Captured for one node: anonymously, and by its org's owner."""
+    assert fixture("node_location.json") == fixture("node_location_member.json")
+
+
+def test_locate_of_a_private_or_missing_node_raises_404(public_api: PublicAPI) -> None:
+    public_api.serve(
+        f"/public/nodes/{PAYMENTS}", fixture("not_found_node_location.json"), status=404
+    )
+
+    with pytest.raises(UnexpectedStatus) as excinfo:
+        yertle.public.locate(PAYMENTS)
+    assert excinfo.value.status_code == 404
+
+
+def test_locate_refuses_a_non_uuid_before_a_request(public_api: PublicAPI) -> None:
+    with pytest.raises(ValueError):
+        yertle.public.locate(PAYMENTS[:8])
+    assert public_api.requests == []
+
+
+def test_locate_raises_on_an_unexpected_response(public_api: PublicAPI) -> None:
+    public_api.serve(f"/public/nodes/{PAYMENTS}", {"detail": []}, status=422)
+
+    with pytest.raises(RuntimeError, match=r"public\.locate"):
+        yertle.public.locate(PAYMENTS)

@@ -21,6 +21,7 @@ from yertle_client.api.nodes import (
     delete_node_orgs_org_id_nodes_node_id_delete,
     list_all_nodes_across_orgs_orgs_all_nodes_get,
     list_nodes_orgs_org_id_nodes_get,
+    locate_node_nodes_node_id_get,
 )
 from yertle_client.api.nodes import (
     get_tree_document_orgs_org_id_nodes_node_id_tree_branch_get as _tree_document,
@@ -35,6 +36,7 @@ from yertle_client.models import (
     HierarchyEntryResponse,
     HierarchyResponse,
     NodeListResponse,
+    NodeLocationResponse,
     NodeResponse,
     NodeTreeDocument,
     PushStateRequest,
@@ -43,7 +45,7 @@ from yertle_client.models import (
 from yertle_client.types import UNSET, Unset
 
 from yertle._client import client
-from yertle._ids import wire_org_id
+from yertle._ids import wire_node_id, wire_org_id
 from yertle._paging import PAGE_SIZE, all_nodes
 
 __all__ = [
@@ -53,6 +55,7 @@ __all__ = [
     "delete",
     "get",
     "list",
+    "locate",
     "push",
     "tree",
 ]
@@ -184,6 +187,29 @@ def create(
     )
     if not isinstance(response, NodeResponse):
         raise RuntimeError(f"Unexpected response from nodes.create({title!r}): {response!r}")
+    return response
+
+
+def locate(node_id: str) -> NodeLocationResponse:
+    """Find which organization a node belongs to, from the node's id alone.
+
+    Every other node route is addressed under its organization, so this is
+    how a caller holding only a node id finds out where to send the rest:
+
+        >>> where = yertle.nodes.locate(node_id)
+        >>> print(where.org_name, where.title)
+        >>> doc = yertle.nodes.get(node_id, org_id=where.org_id)
+
+    It answers for a node in an organization you belong to, or in a public
+    one. Anything else, including a node that does not exist, is a 404,
+    raised as `yertle_client.errors.UnexpectedStatus`; the backend does not
+    say which. Without a token, use `yertle.public.locate()`.
+
+    Raises `ValueError` if `node_id` is not a UUID.
+    """
+    response = locate_node_nodes_node_id_get.sync(client=client(), node_id=wire_node_id(node_id))
+    if not isinstance(response, NodeLocationResponse):
+        raise RuntimeError(f"Unexpected response from nodes.locate({node_id!r}): {response!r}")
     return response
 
 

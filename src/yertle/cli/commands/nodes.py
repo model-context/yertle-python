@@ -21,9 +21,11 @@ from yertle_client.types import Unset
 import yertle
 from yertle.cli._context import (
     NodeIdArgument,
+    NodeOrgOption,
     OrgOption,
     SingleOrgOption,
     anonymous,
+    resolve_node_org,
     resolve_one_org,
     resolve_org,
     resolve_public_org,
@@ -351,7 +353,7 @@ def _render_show(doc: NodeTreeDocument) -> None:
 @app.command("show")
 def show_node(
     node_id: NodeIdArgument,
-    org: SingleOrgOption = None,
+    org: NodeOrgOption = None,
     branch: Annotated[str, typer.Option("--branch", "-b", help="Branch to read.")] = (
         yertle.nodes.DEFAULT_BRANCH
     ),
@@ -359,11 +361,13 @@ def show_node(
 ) -> None:
     """Show a node's details — tags, parents, children and connections.
 
-    Works without a token for a node in a public organization.
+    The organization is looked up from the node. Works without a token for a
+    node in a public organization.
     """
-    org_id = resolve_one_org(org, command="nodes show")
+    public = anonymous()
+    org_id = resolve_node_org(node_id, org, public=public).value
 
-    if anonymous():
+    if public:
         with api_errors(public=True):
             doc = yertle.public.get_node(node_id, org_id=org_id, branch=branch)
     else:
@@ -742,7 +746,7 @@ def _render_push_result(console: Console, result: PushStateResponse) -> None:
 @app.command("delete")
 def delete_node(
     node_id: NodeIdArgument,
-    org: SingleOrgOption = None,
+    org: NodeOrgOption = None,
     yes: Annotated[
         bool,
         typer.Option("--yes", "-y", help="Skip the confirmation prompt."),
@@ -760,7 +764,7 @@ def delete_node(
     it. That check reads the main branch only, so a node attached on another
     branch is not protected by it.
     """
-    org_id = resolve_one_org(org, command="nodes delete")
+    org_id = resolve_node_org(node_id, org).value
 
     # Name what is being deleted before asking. A uuid in a confirmation
     # prompt is not something anyone can check.

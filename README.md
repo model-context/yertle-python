@@ -122,17 +122,31 @@ URL from `$YERTLE_API_URL`, then the config file, then `https://api.yertle.com`.
 
 An organization its owner has made public can be read with no account. With no
 token set, `orgs show`, `nodes list`, `nodes tree` and `nodes show` read it
-through the backend's public routes; pass the org's id with `--org`:
+through the backend's public routes. Pass the org's id with `--org`, except to
+`nodes show`, which looks it up from the node:
 
 ```bash
 yertle nodes tree --org <org-id>
-yertle nodes show <node-id> --org <org-id>
+yertle nodes show <node-id>
 ```
 
 Every other command still needs `yertle login`. Once you are logged in, these
 commands read through your membership instead, as before. From Python, the
-same reads are `yertle.public.get_org()`, `.list_nodes()`, `.hierarchy()` and
-`.get_node()`.
+same reads are `yertle.public.get_org()`, `.list_nodes()`, `.hierarchy()`,
+`.get_node()` and `.locate()`.
+
+### Which organization a command acts on
+
+Commands that take a node id — `nodes show`, `nodes delete`, and every
+`branches` and `prs` command — need no `--org`: they ask the backend which
+organization the node is in. If you pass `--org` or set `$YERTLE_ORG` anyway,
+it has to match, and a mismatch is an error naming both. The default set by
+`yertle orgs use` does not apply to them.
+
+Commands that start from an organization — `nodes list`, `nodes tree`,
+`nodes search`, `nodes create` — take it from `--org`, then `$YERTLE_ORG`,
+then `yertle orgs use`, then every org you belong to (where a command can
+span them). `yertle auth status` shows which source won for each.
 
 ## Development
 
