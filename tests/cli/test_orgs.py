@@ -351,7 +351,7 @@ def test_orgs_create_prints_the_id_first_and_names_the_root(_get_client, sync) -
     assert result.output.splitlines()[0] == "11111111-2222-3333-4444-555555555555"
     text = _cells(result.output)
     assert "Created Acme" in text
-    assert "Root node 99999999-8888-7777-6666-555555555555" in text
+    assert "Root node 99999999 —" in text
 
 
 @patch("yertle.orgs.create_organization_orgs_post.sync")

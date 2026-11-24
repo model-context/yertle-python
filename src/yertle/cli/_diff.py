@@ -22,6 +22,8 @@ from rich.console import Console
 from yertle_client.models import Connection, NodeState, VisualProperty
 from yertle_client.types import Unset
 
+from yertle.cli._render import short_id
+
 __all__ = ["Change", "Kind", "StateDiff", "diff_states", "render_diff"]
 
 
@@ -88,7 +90,7 @@ def _tag_text(raw: Any) -> str:
 def _child_label(vp: VisualProperty) -> str:
     """Prefer the `_title` annotation; an id alone tells the reader nothing."""
     title = vp.field_title if not isinstance(vp.field_title, Unset) else None
-    return str(title or vp.child_node_id)
+    return str(title or short_id(vp.child_node_id))
 
 
 def _edge_label(c: Connection, titles: dict[str, str] | None = None) -> str:
@@ -104,8 +106,8 @@ def _edge_label(c: Connection, titles: dict[str, str] | None = None) -> str:
     lookup = titles or {}
     source = c.field_from_title if not isinstance(c.field_from_title, Unset) else None
     target = c.field_to_title if not isinstance(c.field_to_title, Unset) else None
-    source = source or lookup.get(c.from_child_id) or c.from_child_id
-    target = target or lookup.get(c.to_child_id) or c.to_child_id
+    source = source or lookup.get(c.from_child_id) or short_id(c.from_child_id)
+    target = target or lookup.get(c.to_child_id) or short_id(c.to_child_id)
     label = c.label if not isinstance(c.label, Unset) else None
     line = f"{source} → {target}"
     return f"{line}  ({label})" if label else line

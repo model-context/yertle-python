@@ -32,6 +32,7 @@ from yertle_client.models import NodeLocationResponse
 import yertle
 from yertle._ids import MIN_SHORT_ID, is_short_id
 from yertle.cli._errors import api_error_message, api_errors, die
+from yertle.cli._render import short_id
 from yertle.nodes import ALL_ORGS
 from yertle.shared import auth
 from yertle.shared.auth import Source, configured_org
@@ -226,6 +227,14 @@ class ResolvedNode:
 
     node_id: str
     org: ResolvedOrg
+    #: The node's title, when the lookup returned one. For headings, so a
+    #: table can say which node it is about without another request.
+    title: str | None = None
+
+    def label(self) -> str:
+        """`Title abcd1234`, or the short id alone when there is no title."""
+        short = short_id(self.node_id)
+        return f"{self.title} {short}" if self.title else short
 
 
 def _names(given: str, full: str) -> bool:
@@ -268,7 +277,9 @@ def resolve_node(node_id: str, override: str | None, *, public: bool = False) ->
     if isinstance(location, ResolvedNode):
         return location
     if named is None:
-        return ResolvedNode(location.node_id, ResolvedOrg(location.org_id, Source.LOOKUP))
+        return ResolvedNode(
+            location.node_id, ResolvedOrg(location.org_id, Source.LOOKUP), _title(location)
+        )
     if not _names(named.value, location.org_id):
         option = "--org" if named.source is Source.FLAG else f"${ORG_ENV_VAR}"
         die(
@@ -277,7 +288,9 @@ def resolve_node(node_id: str, override: str | None, *, public: bool = False) ->
             f"  not {named.value}, which came from {option}.\n"
             f"  Drop {option} and the node's own organization is used.",
         )
-    return ResolvedNode(location.node_id, ResolvedOrg(location.org_id, named.source))
+    return ResolvedNode(
+        location.node_id, ResolvedOrg(location.org_id, named.source), _title(location)
+    )
 
 
 def _locate(
@@ -328,8 +341,16 @@ def _resolve_in_public_org(node_id: str, named: ResolvedOrg) -> ResolvedNode:
     the path, for anyone. The node's document is the read that echoes both
     full ids back; it costs a request a node lookup would have cost anyway.
     """
-    status = yertle.public.get_node(node_id, org_id=named.value).status
-    return ResolvedNode(status.node_id, ResolvedOrg(status.org_id, named.source))
+    doc = yertle.public.get_node(node_id, org_id=named.value)
+    status = doc.status
+    return ResolvedNode(
+        status.node_id, ResolvedOrg(status.org_id, named.source), doc.state.node.title or None
+    )
+
+
+def _title(location: NodeLocationResponse) -> str | None:
+    """The lookup's title, if it sent one. Untitled nodes have none."""
+    return location.title if isinstance(location.title, str) and location.title else None
 
 
 def anonymous() -> bool:

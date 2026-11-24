@@ -84,7 +84,7 @@ def test_nodes_list_reads_a_public_org(served: PublicAPI) -> None:
     result = runner.invoke(app, ["nodes", "list", "--org", ORG])
 
     assert result.exit_code == 0, result.output
-    assert f"Nodes in public org {ORG} (6)" in plain(result.output)
+    assert f"Nodes in public org {ORG[:8]} (6)" in plain(result.output)
     _no_token_sent(served)
 
 
@@ -109,7 +109,7 @@ def test_nodes_tree_reads_a_public_org(served: PublicAPI) -> None:
     assert result.exit_code == 0, result.output
     lines = [line.strip("│├└─ ") for line in result.output.splitlines()]
     # Seven entries for six nodes: Ledger DB has a row per parent.
-    assert lines[0] == f"Hierarchy in public org {ORG} (7)"
+    assert lines[0] == f"Hierarchy in public org {ORG[:8]} (7)"
     # Ledger DB has two parents and appears under both; Scratchpad is
     # attached to nothing, so it is a root beside Root.
     # Ids are short in the tree, as in every table (#60). These fixtures'

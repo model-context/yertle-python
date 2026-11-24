@@ -100,7 +100,7 @@ def test_nodes_list_reads_the_org_env_var(
     monkeypatch.setenv(ORG_ENV_VAR, ORG)
     result = runner.invoke(app, ["nodes", "list"])
     assert result.exit_code == 0, result.output
-    assert ORG in result.output
+    assert f"Nodes in org {ORG[:8]} (" in result.output
 
 
 def test_nodes_list_rejects_a_malformed_org() -> None:
