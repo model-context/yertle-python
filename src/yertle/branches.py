@@ -15,7 +15,6 @@ Module-as-namespace, following the shape `orgs.py` established.
 from __future__ import annotations
 
 import builtins
-from uuid import UUID
 
 from yertle_client.api.branches import (
     create_branch_orgs_org_id_nodes_node_id_branches_post,
@@ -30,15 +29,14 @@ from yertle_client.models import (
 )
 
 from yertle._client import client
+from yertle._ids import wire_org_id
 from yertle.nodes import DEFAULT_BRANCH
 
 __all__ = ["DEFAULT_BRANCH", "create", "delete", "list"]
 
-# `org_id` is converted to `UUID` for the wire call, matching `nodes.py`.
-# Until yertle-client 0.3.1 these endpoints typed it as a plain `str` while
-# their node-side siblings used `UUID`; the authz work that made every
-# `/orgs/{org_id}/...` route check membership (yertle#380) normalised them.
-# The public signature here stays `str`, so callers are unaffected.
+# `org_id` goes through `wire_org_id` for the wire call, matching `nodes.py`:
+# a malformed id fails here with a ValueError instead of as a backend 400.
+# See `yertle/_ids.py` for why that check outlived the client's UUID typing.
 
 
 # `list` shadows the builtin inside this module — annotations reference
@@ -55,7 +53,7 @@ def list(node_id: str, *, org_id: str) -> builtins.list[BranchResponse]:
     """
     response = list_branches_orgs_org_id_nodes_node_id_branches_get.sync(
         client=client(),
-        org_id=UUID(org_id),
+        org_id=wire_org_id(org_id),
         node_id=node_id,
     )
     if not isinstance(response, BranchListResponse):
@@ -77,7 +75,7 @@ def create(
     """
     response = create_branch_orgs_org_id_nodes_node_id_branches_post.sync(
         client=client(),
-        org_id=UUID(org_id),
+        org_id=wire_org_id(org_id),
         node_id=node_id,
         body=CreateBranchRequest(name=name, base_branch=base_branch),
     )
@@ -107,7 +105,7 @@ def delete(name: str, *, node_id: str, org_id: str, force: bool = False) -> str:
     """
     response = delete_branch_orgs_org_id_nodes_node_id_branches_branch_name_delete.sync(
         client=client(),
-        org_id=UUID(org_id),
+        org_id=wire_org_id(org_id),
         node_id=node_id,
         branch_name=name,
         force=force,

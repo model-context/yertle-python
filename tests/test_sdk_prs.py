@@ -8,7 +8,6 @@ result rather than the PR, and that difference is deliberate.
 
 import datetime
 from unittest.mock import patch
-from uuid import UUID
 
 import pytest
 from yertle_client.models import (
@@ -56,7 +55,7 @@ def _pr(number: int = 1, status: str = "open") -> PullRequestResponse:
 def test_list_unwraps_the_envelope(_client, sync) -> None:
     prs = yertle.prs.list(NODE, org_id=ORG)
     assert [p.number for p in prs] == [1, 2]
-    assert sync.call_args.kwargs["org_id"] == UUID(ORG)
+    assert sync.call_args.kwargs["org_id"] == ORG
     assert sync.call_args.kwargs["node_id"] == NODE
     # No filter requested means no filter sent — not an empty one.
     assert sync.call_args.kwargs["status"] is UNSET

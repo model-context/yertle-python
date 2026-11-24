@@ -22,8 +22,6 @@ returns less than a member's: no role, no invite settings.
 
 from __future__ import annotations
 
-from uuid import UUID
-
 from yertle_client.api.public import (
     get_public_org_graph_public_orgs_org_id_graph_get,
     get_public_org_nodes_public_orgs_org_id_nodes_get,
@@ -32,6 +30,7 @@ from yertle_client.api.public import (
 from yertle_client.models import NodeListResponse, NodeResponse, NodeTreeDocument, OrgGraphResponse
 
 from yertle._client import anonymous_client
+from yertle._ids import wire_org_id
 from yertle._paging import PAGE_SIZE, all_nodes
 from yertle.nodes import DEFAULT_BRANCH
 
@@ -60,7 +59,7 @@ def graph(org_id: str) -> OrgGraphResponse:
     """
     response = get_public_org_graph_public_orgs_org_id_graph_get.sync(
         client=anonymous_client(),
-        org_id=UUID(org_id),
+        org_id=wire_org_id(org_id),
     )
     if not isinstance(response, OrgGraphResponse):
         raise RuntimeError(f"Unexpected response from public.graph({org_id!r}): {response!r}")
@@ -78,12 +77,12 @@ def list_nodes(org_id: str) -> list[NodeResponse]:
 
     Raises `ValueError` if `org_id` is not a UUID.
     """
-    org_uuid = UUID(org_id)
+    wire_id = wire_org_id(org_id)
 
     def fetch_page(offset: int) -> NodeListResponse:
         response = get_public_org_nodes_public_orgs_org_id_nodes_get.sync(
             client=anonymous_client(),
-            org_id=org_uuid,
+            org_id=wire_id,
             limit=PAGE_SIZE,
             offset=offset,
         )
@@ -108,7 +107,7 @@ def get_node(node_id: str, *, org_id: str, branch: str = DEFAULT_BRANCH) -> Node
     """
     response = get_public_tree_document_public_orgs_org_id_nodes_node_id_tree_branch_get.sync(
         client=anonymous_client(),
-        org_id=UUID(org_id),
+        org_id=wire_org_id(org_id),
         node_id=node_id,
         branch=branch,
     )

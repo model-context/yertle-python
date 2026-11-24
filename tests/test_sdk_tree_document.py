@@ -14,7 +14,6 @@ neither is about happy-path plumbing:
 import json
 from pathlib import Path
 from unittest.mock import patch
-from uuid import UUID
 
 import pytest
 from yertle_client.models import NodeTreeDocument, PushStateResponse, VisualProperty
@@ -75,7 +74,7 @@ def test_annotations_are_typed_fields_not_extras() -> None:
 @patch("yertle._client.get_client", return_value=object())
 def test_get_passes_the_org_as_a_uuid(_client, sync) -> None:
     yertle.nodes.get(NODE, org_id=ORG)
-    assert sync.call_args.kwargs["org_id"] == UUID(ORG)
+    assert sync.call_args.kwargs["org_id"] == ORG
     assert sync.call_args.kwargs["node_id"] == NODE
     assert sync.call_args.kwargs["branch"] == "main"
 
@@ -99,7 +98,7 @@ def test_push_sends_the_document_where_it_came_from(_client, sync) -> None:
     """A document identifies its own node; the caller should not have to."""
     doc = _document()
     yertle.nodes.push(doc, message="edit")
-    assert sync.call_args.kwargs["org_id"] == UUID(doc.status.org_id)
+    assert sync.call_args.kwargs["org_id"] == doc.status.org_id
     assert sync.call_args.kwargs["node_id"] == doc.status.node_id
     assert sync.call_args.kwargs["branch"] == doc.status.branch
 

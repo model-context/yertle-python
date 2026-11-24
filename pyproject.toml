@@ -36,7 +36,14 @@ dependencies = [
     # 0.4.0 types a tree document read at a commit: `expected_head_commit`
     # and `status.branch` become optional (such a document is read-only), and
     # the deleted /complete routes are gone (yertle#383, #411).
-    "yertle-client>=0.4.0,<0.5.0",
+    #
+    # 0.5.x adds `GET /public/orgs/{id}` (an anonymous caller's org details)
+    # and types every `org_id` path parameter as `str` rather than `UUID`,
+    # because the backend now accepts a unique 8+ hex prefix too. The SDK
+    # still validates full UUIDs itself; see `yertle/_ids.py`. The floor is
+    # 0.5.1 because 0.5.0 is unimportable: it was generated with `import
+    # httpx2` while declaring `httpx`.
+    "yertle-client>=0.5.1,<0.6.0",
     # typer + rich are base, not an extra, so `uv tool install yertle` gives a
     # working CLI. They used to sit behind [cli], which made the most natural
     # install command fail with an ImportError traceback — the package is named

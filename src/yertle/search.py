@@ -12,8 +12,6 @@ this ranks by semantic similarity, it does not filter by exact field values.
 
 from __future__ import annotations
 
-from uuid import UUID
-
 from yertle_client.api.search import (
     retrieve_subgraph_orgs_org_id_search_retrieve_post as _retrieve,
 )
@@ -27,6 +25,7 @@ from yertle_client.models import (
 from yertle_client.types import UNSET, Unset
 
 from yertle._client import client
+from yertle._ids import wire_org_id
 
 __all__ = ["Expansion", "retrieve"]
 
@@ -73,7 +72,7 @@ def retrieve(
 
     response = _retrieve.sync(
         client=client(),
-        org_id=UUID(org_id),
+        org_id=wire_org_id(org_id),
         body=RetrieveRequest(
             query=query,
             top_k=top_k,

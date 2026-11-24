@@ -99,3 +99,10 @@ def test_orgs_create_omits_an_unset_description(_get_client, sync) -> None:
 def test_orgs_create_raises_on_an_unexpected_response(_get_client, _sync) -> None:
     with pytest.raises(RuntimeError, match="Unexpected response"):
         yertle.orgs.create("Acme")
+
+
+@pytest.mark.usefixtures("token")
+def test_a_malformed_org_id_fails_before_a_request() -> None:
+    """yertle-client 0.5 types org ids as str; the SDK still refuses a non-UUID itself."""
+    with pytest.raises(ValueError):
+        yertle.nodes.list("not-a-uuid")
