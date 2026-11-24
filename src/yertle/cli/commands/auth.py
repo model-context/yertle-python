@@ -93,4 +93,9 @@ def status() -> None:
         console.print(
             f"\n[red]Not authenticated.[/red] Run `yertle login` or set ${auth.TOKEN_ENV_VAR}.",
         )
+        # Still exit 1: this is a precondition check for commands that need a
+        # token. The hint is for the person reading it, who may not.
+        console.print(
+            "[dim]Public organizations can be read without one: yertle nodes tree --org <id>[/dim]",
+        )
         raise typer.Exit(code=1)

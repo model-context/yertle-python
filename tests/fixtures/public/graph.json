@@ -1,0 +1,111 @@
+{
+  "nodes": [
+    {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "title": "Root",
+      "num_parents": 0,
+      "num_children": 3,
+      "num_descendants": 4,
+      "num_ancestors": 0,
+      "org_id": "00000000-0000-4000-8000-000000000002"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "title": "Checkout API",
+      "num_parents": 1,
+      "num_children": 1,
+      "num_descendants": 1,
+      "num_ancestors": 1,
+      "org_id": "00000000-0000-4000-8000-000000000002"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "title": "Payments",
+      "num_parents": 1,
+      "num_children": 1,
+      "num_descendants": 1,
+      "num_ancestors": 1,
+      "org_id": "00000000-0000-4000-8000-000000000002"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000005",
+      "title": "Ledger DB",
+      "num_parents": 2,
+      "num_children": 0,
+      "num_descendants": 0,
+      "num_ancestors": 3,
+      "org_id": "00000000-0000-4000-8000-000000000002"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000006",
+      "title": "Auth / Sessions",
+      "num_parents": 1,
+      "num_children": 0,
+      "num_descendants": 0,
+      "num_ancestors": 1,
+      "org_id": "00000000-0000-4000-8000-000000000002"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000007",
+      "title": "Scratchpad",
+      "num_parents": 0,
+      "num_children": 0,
+      "num_descendants": 0,
+      "num_ancestors": 0,
+      "org_id": "00000000-0000-4000-8000-000000000002"
+    }
+  ],
+  "edges": [
+    {
+      "source": "00000000-0000-4000-8000-000000000001",
+      "target": "00000000-0000-4000-8000-000000000003",
+      "edge_type": "parent_child",
+      "label": null,
+      "connection_type": null,
+      "parent_node_id": null
+    },
+    {
+      "source": "00000000-0000-4000-8000-000000000001",
+      "target": "00000000-0000-4000-8000-000000000006",
+      "edge_type": "parent_child",
+      "label": null,
+      "connection_type": null,
+      "parent_node_id": null
+    },
+    {
+      "source": "00000000-0000-4000-8000-000000000001",
+      "target": "00000000-0000-4000-8000-000000000004",
+      "edge_type": "parent_child",
+      "label": null,
+      "connection_type": null,
+      "parent_node_id": null
+    },
+    {
+      "source": "00000000-0000-4000-8000-000000000004",
+      "target": "00000000-0000-4000-8000-000000000005",
+      "edge_type": "parent_child",
+      "label": null,
+      "connection_type": null,
+      "parent_node_id": null
+    },
+    {
+      "source": "00000000-0000-4000-8000-000000000003",
+      "target": "00000000-0000-4000-8000-000000000005",
+      "edge_type": "parent_child",
+      "label": null,
+      "connection_type": null,
+      "parent_node_id": null
+    },
+    {
+      "source": "00000000-0000-4000-8000-000000000003",
+      "target": "00000000-0000-4000-8000-000000000004",
+      "edge_type": "connection",
+      "label": "charges",
+      "connection_type": "default",
+      "parent_node_id": "00000000-0000-4000-8000-000000000001"
+    }
+  ],
+  "total_nodes": 6,
+  "total_edges": 6,
+  "org_name": "Example public org"
+}

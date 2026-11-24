@@ -26,6 +26,9 @@ from yertle.shared import auth as auth_mod
 
 runner = CliRunner()
 
+# A member's view: with no token these commands read the public routes instead.
+pytestmark = pytest.mark.usefixtures("token")
+
 ORG = "8f14e45f-ceea-467a-9575-28db8d0dc4db"
 
 

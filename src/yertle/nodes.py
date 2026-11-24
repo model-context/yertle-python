@@ -11,7 +11,6 @@ Module-as-namespace, following the shape `orgs.py` established.
 from __future__ import annotations
 
 import builtins
-from uuid import UUID
 
 from yertle_client.api.directories import (
     get_all_orgs_hierarchy_orgs_all_hierarchy_get,
@@ -44,6 +43,8 @@ from yertle_client.models import (
 from yertle_client.types import UNSET, Unset
 
 from yertle._client import client
+from yertle._ids import wire_org_id
+from yertle._paging import PAGE_SIZE, all_nodes
 
 __all__ = [
     "ALL_ORGS",
@@ -63,10 +64,6 @@ ALL_ORGS = "all"
 #: Branch reads default here, matching the backend's own default branch name.
 DEFAULT_BRANCH = "main"
 
-# The endpoint's own default page size. Named because the loop below reasons
-# about it, not because it is configurable.
-_PAGE_SIZE = 50
-
 
 # `list` shadows the builtin inside this module — annotations reference
 # `builtins.list` explicitly, exactly as `orgs.py` does. The shadow is only
@@ -83,17 +80,7 @@ def list(org_id: str = ALL_ORGS) -> builtins.list[NodeResponse]:
 
     Raises `ValueError` if `org_id` is neither `"all"` nor a UUID.
     """
-    nodes: builtins.list[NodeResponse] = []
-    offset = 0
-    while True:
-        page = _fetch_page(org_id, offset=offset)
-        nodes.extend(page.nodes)
-        # Stop on a short or empty page as well as on the reported total: a
-        # total that never catches up would otherwise spin forever, and an
-        # empty page means there is nothing left regardless of what it says.
-        if not page.nodes or len(nodes) >= page.total:
-            return nodes
-        offset += len(page.nodes)
+    return all_nodes(lambda offset: _fetch_page(org_id, offset=offset))
 
 
 def _fetch_page(org_id: str, *, offset: int) -> NodeListResponse:
@@ -101,17 +88,14 @@ def _fetch_page(org_id: str, *, offset: int) -> NodeListResponse:
     if org_id == ALL_ORGS:
         response = list_all_nodes_across_orgs_orgs_all_nodes_get.sync(
             client=client(),
-            limit=_PAGE_SIZE,
+            limit=PAGE_SIZE,
             offset=offset,
         )
     else:
-        # The generated signature types this as UUID even though sibling
-        # endpoints take a plain str; convert rather than pass a str through a
-        # mistyped parameter.
         response = list_nodes_orgs_org_id_nodes_get.sync(
             client=client(),
-            org_id=UUID(org_id),
-            limit=_PAGE_SIZE,
+            org_id=wire_org_id(org_id),
+            limit=PAGE_SIZE,
             offset=offset,
         )
     if not isinstance(response, NodeListResponse):
@@ -138,7 +122,7 @@ def tree(org_id: str = ALL_ORGS) -> builtins.list[HierarchyEntryResponse]:
     else:
         response = get_org_hierarchy_orgs_org_id_hierarchy_get.sync(
             client=client(),
-            org_id=UUID(org_id),
+            org_id=wire_org_id(org_id),
         )
     if not isinstance(response, HierarchyResponse):
         raise RuntimeError(f"Unexpected response from nodes.tree(): {response!r}")
@@ -188,7 +172,7 @@ def create(
 
     response = create_node_orgs_org_id_nodes_post.sync(
         client=client(),
-        org_id=UUID(org_id),
+        org_id=wire_org_id(org_id),
         body=CreateNodeRequest(
             title=title,
             description=description if description is not None else UNSET,
@@ -232,7 +216,7 @@ def get(
         raise ValueError("nodes.get() needs a specific org_id, not 'all'.")
     response = _tree_document.sync(
         client=client(),
-        org_id=UUID(org_id),
+        org_id=wire_org_id(org_id),
         node_id=node_id,
         branch=branch,
     )
@@ -302,7 +286,7 @@ def push(
 
     response = _push.sync(
         client=client(),
-        org_id=UUID(target_org),
+        org_id=wire_org_id(target_org),
         node_id=target_node,
         branch=target_branch,
         body=PushStateRequest(
@@ -342,7 +326,7 @@ def delete(node_id: str, *, org_id: str) -> DeletionResultResponse:
         raise ValueError("nodes.delete() needs a specific org_id, not 'all'.")
     response = delete_node_orgs_org_id_nodes_node_id_delete.sync(
         client=client(),
-        org_id=UUID(org_id),
+        org_id=wire_org_id(org_id),
         node_id=node_id,
     )
     if not isinstance(response, DeletionResultResponse):

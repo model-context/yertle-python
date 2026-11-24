@@ -15,7 +15,6 @@ Module-as-namespace, following the shape `orgs.py` established.
 from __future__ import annotations
 
 import builtins
-from uuid import UUID
 
 from yertle_client.api.pull_requests import (
     close_pull_request_orgs_org_id_nodes_node_id_pull_requests_pr_number_close_post as _close,
@@ -43,6 +42,7 @@ from yertle_client.models import (
 from yertle_client.types import UNSET
 
 from yertle._client import client
+from yertle._ids import wire_org_id
 from yertle.nodes import DEFAULT_BRANCH
 
 __all__ = ["close", "create", "get", "list", "merge"]
@@ -66,7 +66,7 @@ def list(
     """
     response = _list.sync(
         client=client(),
-        org_id=UUID(org_id),
+        org_id=wire_org_id(org_id),
         node_id=node_id,
         status=status if status is not None else UNSET,
     )
@@ -82,7 +82,9 @@ def get(number: int, *, node_id: str, org_id: str) -> PullRequestResponse:
     list does not compute — so this is the call that answers "will this
     merge?" before you try.
     """
-    response = _get.sync(client=client(), org_id=UUID(org_id), node_id=node_id, pr_number=number)
+    response = _get.sync(
+        client=client(), org_id=wire_org_id(org_id), node_id=node_id, pr_number=number
+    )
     if not isinstance(response, PRDetailResponse):
         raise RuntimeError(f"Unexpected response from prs.get({number}): {response!r}")
     return response.pr
@@ -101,7 +103,7 @@ def create(
     """Open a pull request from `source_branch` into `target_branch`."""
     response = _create.sync(
         client=client(),
-        org_id=UUID(org_id),
+        org_id=wire_org_id(org_id),
         node_id=node_id,
         body=CreatePRRequest(
             title=title,
@@ -122,7 +124,9 @@ def merge(number: int, *, node_id: str, org_id: str) -> MergePRResponse:
     The response carries `merged` and `merge_commit` rather than the PR, so
     a caller that wants the PR's new state reads it back with `get()`.
     """
-    response = _merge.sync(client=client(), org_id=UUID(org_id), node_id=node_id, pr_number=number)
+    response = _merge.sync(
+        client=client(), org_id=wire_org_id(org_id), node_id=node_id, pr_number=number
+    )
     if not isinstance(response, MergePRResponse):
         raise RuntimeError(f"Unexpected response from prs.merge({number}): {response!r}")
     return response
@@ -130,7 +134,9 @@ def merge(number: int, *, node_id: str, org_id: str) -> MergePRResponse:
 
 def close(number: int, *, node_id: str, org_id: str) -> PullRequestResponse:
     """Close a pull request without merging it."""
-    response = _close.sync(client=client(), org_id=UUID(org_id), node_id=node_id, pr_number=number)
+    response = _close.sync(
+        client=client(), org_id=wire_org_id(org_id), node_id=node_id, pr_number=number
+    )
     if not isinstance(response, PRDetailResponse):
         raise RuntimeError(f"Unexpected response from prs.close({number}): {response!r}")
     return response.pr

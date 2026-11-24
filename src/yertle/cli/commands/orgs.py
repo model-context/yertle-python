@@ -8,7 +8,7 @@ from yertle_client.models import OrganizationResponse
 from yertle_client.types import Unset
 
 import yertle
-from yertle.cli._context import ALL_ORGS, validate_org
+from yertle.cli._context import ALL_ORGS, anonymous, validate_org
 from yertle.cli._errors import api_errors, die
 from yertle.cli._render import (
     FORMAT_EPILOG,
@@ -144,9 +144,13 @@ def show_org(
     org_id: Annotated[str, typer.Argument(help="Organization id from `yertle orgs list`.")],
     fmt: FormatOption = Format.TABLE,
 ) -> None:
-    """Show an organization's details."""
+    """Show an organization's details. Works without a token for a public org."""
     if validate_org(org_id.strip()) == ALL_ORGS:
         die(f"`orgs show` needs one organization id, not '{ALL_ORGS}'.")
+
+    if anonymous():
+        _show_public_org(org_id.strip(), fmt)
+        return
 
     with api_errors():
         org = _merged(org_id.strip())
@@ -172,6 +176,30 @@ def show_org(
             ("Root node", _optional(org.root_node_id)),
         ],
     )
+
+
+def _show_public_org(org_id: str, fmt: Format) -> None:
+    """Show what the public route returns about an org: less than a member sees."""
+    with api_errors(public=True):
+        org = yertle.public.get_org(org_id)
+
+    if fmt is Format.JSON:
+        dump_json(org)
+        return
+
+    typer.echo(org.name)
+    typer.secho(org.id, dim=True)
+    if description := (org.description or "").strip():
+        typer.echo(f"\n{description}")
+    typer.echo()
+    fields(
+        [
+            ("Members", str(org.member_count)),
+            ("Nodes", str(org.node_count)),
+            ("Visibility", "public"),
+        ],
+    )
+    typer.secho("\nRead without a token. Run `yertle login` to see your own orgs.", dim=True)
 
 
 @app.command("create")

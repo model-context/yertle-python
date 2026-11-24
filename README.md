@@ -118,6 +118,27 @@ Credentials resolve from `$YERTLE_TOKEN` then `~/.yertle/config.json`; the API
 URL from `$YERTLE_API_URL`, then the config file, then `https://api.yertle.com`.
 `yertle auth status` reports which source won for each.
 
+### Reading a public organization without a token
+
+An organization its owner has made public can be read with no account. With no
+token set, `orgs show`, `nodes list`, `nodes tree` and `nodes show` read it
+through the backend's public routes; pass the org's id with `--org`:
+
+```bash
+yertle nodes tree --org <org-id>
+yertle nodes show <node-id> --org <org-id>
+```
+
+One difference to know if you script against it: `nodes tree --format json`
+without a token prints the org's public graph (`nodes`, `edges`, `org_name`,
+`total_nodes`, `total_edges`), not the hierarchy entry list you get when
+logged in. The backend has no public hierarchy route yet.
+
+Every other command still needs `yertle login`. Once you are logged in, these
+commands read through your membership instead, as before. From Python, the
+same reads are `yertle.public.get_org()`, `.graph()`, `.list_nodes()` and
+`.get_node()`.
+
 ## Development
 
 Requires [`uv`](https://docs.astral.sh/uv/) and Python 3.11+.

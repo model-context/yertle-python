@@ -23,6 +23,8 @@ import pytest
 SRC = Path(__file__).resolve().parent.parent / "src" / "yertle"
 
 AUTH_MODULE = SRC / "shared" / "auth.py"
+CLIENT_MODULE = SRC / "_client.py"
+PUBLIC_MODULE = SRC / "public.py"
 SHELL_MODULE = SRC / "sre" / "tools" / "_shell.py"
 CLI_PACKAGE = SRC / "cli"
 
@@ -57,6 +59,11 @@ def test_credentials_are_resolved_only_in_shared_auth(source_files: list[Path]) 
     a plausible place to "just read the env var". Doing so forks the precedence
     chain documented in `auth.resolve()` — the failure mode is a surface that
     honors `$YERTLE_TOKEN` but silently ignores `~/.yertle/config.json`.
+
+    That includes deciding a token is *absent*. Since anonymous reads, a
+    missing token is a state `resolve()` reports rather than an error, and a
+    surface checking `$YERTLE_TOKEN` itself would read a config-file login as
+    anonymous and send a member to the public routes.
     """
     offenders: list[str] = []
     for path in source_files:
@@ -124,6 +131,57 @@ def test_cli_calls_the_sdk_not_the_wire_layer(source_files: list[Path]) -> None:
     assert not offenders, (
         "CLI commands must call the SDK (`yertle.orgs`, `yertle.nodes`, …) rather "
         "than the generated wire layer:\n  " + "\n  ".join(offenders)
+    )
+
+
+def _names_used(tree: ast.Module) -> set[str]:
+    """Every name a module imports or refers to, including `module.attribute` access.
+
+    Imports are matched on the original name, not the alias, so `import x as y`
+    cannot hide a use of `x`.
+    """
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import | ast.ImportFrom):
+            names.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.Attribute):
+            names.add(node.attr)
+        elif isinstance(node, ast.Name):
+            names.add(node.id)
+    return names
+
+
+def test_anonymous_reads_only_reach_public_routes(source_files: list[Path]) -> None:
+    """The token-less client is used by `yertle/public.py` alone, for `/public` routes alone.
+
+    Since anonymous reads exist, "no token" is no longer an error by itself —
+    `auth.resolve()` reports it and the caller decides. The risk that opens is
+    a command quietly falling back to the anonymous client for a route that
+    needs a token: at best a confusing 401, at worst a write path that looks
+    like it should work. So the anonymous client is confined to one module,
+    and that module may only call the generated `public` bindings, which are
+    the backend's unauthenticated read router and nothing else.
+    """
+    users = [
+        _rel(path)
+        for path in source_files
+        if path not in (AUTH_MODULE, CLIENT_MODULE)
+        and {"anonymous_client", "get_anonymous_client"} & _names_used(_parse(path))
+    ]
+    assert users == [_rel(PUBLIC_MODULE)], (
+        "Only yertle/public.py may use the anonymous client; everything else "
+        f"needs a token and goes through `client()`. Found: {users}"
+    )
+
+    imported_modules = {
+        node.module or ""
+        for node in ast.walk(_parse(PUBLIC_MODULE))
+        if isinstance(node, ast.ImportFrom)
+    }
+    wire_modules = {module for module in imported_modules if module.startswith("yertle_client.api")}
+    assert wire_modules == {"yertle_client.api.public"}, (
+        "yertle/public.py sends no token, so it may only call the backend's "
+        f"public routes (`yertle_client.api.public`). It imports: {sorted(wire_modules)}"
     )
 
 

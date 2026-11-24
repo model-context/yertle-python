@@ -14,6 +14,7 @@ from yertle_client.models import (
     HierarchyEntryResponse,
     NodeResponse,
     NodeTreeDocument,
+    OrgGraphResponse,
     PushStateResponse,
 )
 from yertle_client.types import Unset
@@ -23,8 +24,10 @@ from yertle.cli._context import (
     NodeIdArgument,
     OrgOption,
     SingleOrgOption,
+    anonymous,
     resolve_one_org,
     resolve_org,
+    resolve_public_org,
 )
 from yertle.cli._diff import diff_states, render_diff
 from yertle.cli._errors import api_errors, die
@@ -80,7 +83,22 @@ ORG_COLUMN: Column[NodeResponse] = Column(
 
 @app.command("list")
 def list_nodes(org: OrgOption = None, fmt: FormatOption = Format.TABLE) -> None:
-    """List nodes in an organization, or across every org you belong to."""
+    """List nodes in an organization, or across every org you belong to.
+
+    Without a token, lists a public organization named with --org.
+    """
+    if anonymous():
+        public_org = resolve_public_org(org)
+        with api_errors(public=True):
+            public_nodes = yertle.public.list_nodes(public_org)
+        render(
+            public_nodes,
+            fmt=fmt,
+            columns=BASE_COLUMNS,
+            title=f"Nodes in public org {public_org} ({len(public_nodes)})",
+        )
+        return
+
     org_id = resolve_org(org)
 
     with api_errors():
@@ -185,9 +203,85 @@ def _build_tree(entries: list[HierarchyEntryResponse], label: str) -> Tree:
     return tree
 
 
+def _graph_tree(graph: OrgGraphResponse, label: str) -> Tree:
+    """Assemble a Rich tree from a public org's containment edges.
+
+    There is no public hierarchy route, so an anonymous `nodes tree` builds
+    the same picture from the graph instead: the backend derives the
+    hierarchy from exactly these parent-child edges. A node with two parents
+    appears under both, as it does in the hierarchy.
+
+    Roots are the nodes nothing contains. A cycle has no root, so whatever a
+    walk from the roots did not reach is started from at the top level too —
+    otherwise those nodes would silently vanish. The ancestor set stops the
+    walk from following a cycle round forever.
+    """
+    titles = {node.id: node.title for node in graph.nodes}
+    children_of: dict[str, list[str]] = defaultdict(list)
+    for edge in graph.edges:
+        if (
+            edge.edge_type == yertle.public.PARENT_CHILD
+            and {edge.source, edge.target} <= titles.keys()
+        ):
+            children_of[edge.source].append(edge.target)
+
+    def by_title(node_ids: builtins.list[str]) -> builtins.list[str]:
+        return sorted(node_ids, key=lambda node_id: (titles[node_id], node_id))
+
+    shown: set[str] = set()
+
+    def grow(parent: Tree, node_id: str, ancestors: frozenset[str]) -> None:
+        shown.add(node_id)
+        branch = parent.add(f"{titles[node_id]}  [dim]{node_id}[/dim]")
+        for child in by_title(children_of[node_id]):
+            if child not in ancestors:
+                grow(branch, child, ancestors | {child})
+
+    tree = Tree(label)
+    contained = {child for children in children_of.values() for child in children}
+    for root in by_title([node_id for node_id in titles if node_id not in contained]):
+        grow(tree, root, frozenset({root}))
+    for node_id in by_title(builtins.list(titles)):
+        if node_id not in shown:
+            grow(tree, node_id, frozenset({node_id}))
+    return tree
+
+
+def _public_tree(org: str | None, fmt: Format) -> None:
+    """`nodes tree` without a token. JSON output is the graph it was built from.
+
+    Printed unchanged rather than reshaped into hierarchy entries: the
+    backend computes entry paths with its own rules for cycles and nodes with
+    several parents, and a copy of those rules here would drift from them.
+    """
+    org_id = resolve_public_org(org)
+    with api_errors(public=True):
+        graph = yertle.public.graph(org_id)
+
+    if fmt is Format.JSON:
+        dump_json(graph)
+        return
+    if not graph.nodes:
+        typer.echo("No nodes found.")
+        return
+    label = f"Hierarchy in public org {org_id} ({len(graph.nodes)})"
+    Console().print(_graph_tree(graph, label))
+
+
 @app.command("tree")
 def tree_nodes(org: OrgOption = None, fmt: FormatOption = Format.TABLE) -> None:
-    """Show the containment hierarchy — what contains what."""
+    """Show the containment hierarchy — what contains what.
+
+    Without a token, shows a public organization named with --org. The drawn
+    tree looks the same either way, but [bold]--format json differs[/bold]:
+    logged in, it is the flat hierarchy entry list; without a token, it is the
+    org's public graph (nodes, plus parent_child and connection edges), since
+    the backend has no public hierarchy route.
+    """
+    if anonymous():
+        _public_tree(org, fmt)
+        return
+
     org_id = resolve_org(org)
 
     with api_errors():
@@ -333,11 +427,18 @@ def show_node(
     ),
     fmt: FormatOption = Format.TABLE,
 ) -> None:
-    """Show a node's details — tags, parents, children and connections."""
+    """Show a node's details — tags, parents, children and connections.
+
+    Works without a token for a node in a public organization.
+    """
     org_id = resolve_one_org(org, command="nodes show")
 
-    with api_errors():
-        doc = yertle.nodes.get(node_id, org_id=org_id, branch=branch)
+    if anonymous():
+        with api_errors(public=True):
+            doc = yertle.public.get_node(node_id, org_id=org_id, branch=branch)
+    else:
+        with api_errors():
+            doc = yertle.nodes.get(node_id, org_id=org_id, branch=branch)
 
     if fmt is Format.JSON:
         dump_json(doc)

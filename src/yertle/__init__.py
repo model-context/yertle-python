@@ -6,9 +6,9 @@
 
 Resources live in per-feature modules (`yertle.orgs`, `yertle.nodes`,
 `yertle.search`, `yertle.branches`, `yertle.prs`, …) and are re-exported
-here. Default-client plumbing lives in `yertle._client`; users interact with
-it via the top-level `yertle.client()` and `yertle.configure(...)`
-re-exports.
+here. `yertle.public` reads public organizations without a token.
+Default-client plumbing lives in `yertle._client`; users interact with it
+via the top-level `yertle.client()` and `yertle.configure(...)` re-exports.
 
 The wire layer (`yertle_client`) remains available as the escape hatch
 for callers who want an explicit client, async variants, or untyped raw
@@ -20,7 +20,7 @@ from importlib.metadata import version as _dist_version
 
 from yertle_client.client import AuthenticatedClient
 
-from yertle import branches, nodes, orgs, prs, search
+from yertle import branches, nodes, orgs, prs, public, search
 from yertle._client import client, configure, get_client
 
 try:
@@ -40,5 +40,6 @@ __all__ = [
     "nodes",
     "orgs",
     "prs",
+    "public",
     "search",
 ]
