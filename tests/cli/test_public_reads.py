@@ -9,6 +9,7 @@ an empty temp path.
 import io
 import json
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -124,11 +125,21 @@ def test_nodes_tree_reads_a_public_org(served: PublicAPI) -> None:
     _no_token_sent(served)
 
 
-def test_nodes_tree_json_is_the_graph(served: PublicAPI) -> None:
+def test_nodes_tree_json_is_the_public_graph_unchanged(served: PublicAPI) -> None:
+    """Pinned on purpose: anonymously this is NOT the member `/hierarchy` shape.
+
+    The README and `nodes tree --help` say so. If a public hierarchy route
+    lands and this switches to entries, that is a visible change for scripts
+    and this test should change with the docs, not quietly.
+    """
     result = runner.invoke(app, ["nodes", "tree", "--org", ORG, "--format", "json"])
 
     assert result.exit_code == 0, result.output
-    assert json.loads(result.output)["total_nodes"] == 6
+    payload = json.loads(result.output)
+    assert set(payload) == {"nodes", "edges", "org_name", "total_nodes", "total_edges"}
+    assert payload == fixture("graph.json")
+    member_shape: Any = fixture("hierarchy_same_org.json")
+    assert payload != member_shape["entries"]
 
 
 def _drawn(tree: Tree) -> str:

@@ -248,7 +248,12 @@ def _graph_tree(graph: OrgGraphResponse, label: str) -> Tree:
 
 
 def _public_tree(org: str | None, fmt: Format) -> None:
-    """`nodes tree` without a token. JSON output is the graph it was built from."""
+    """`nodes tree` without a token. JSON output is the graph it was built from.
+
+    Printed unchanged rather than reshaped into hierarchy entries: the
+    backend computes entry paths with its own rules for cycles and nodes with
+    several parents, and a copy of those rules here would drift from them.
+    """
     org_id = resolve_public_org(org)
     with api_errors(public=True):
         graph = yertle.public.graph(org_id)
@@ -267,7 +272,11 @@ def _public_tree(org: str | None, fmt: Format) -> None:
 def tree_nodes(org: OrgOption = None, fmt: FormatOption = Format.TABLE) -> None:
     """Show the containment hierarchy — what contains what.
 
-    Without a token, shows a public organization named with --org.
+    Without a token, shows a public organization named with --org. The drawn
+    tree looks the same either way, but [bold]--format json differs[/bold]:
+    logged in, it is the flat hierarchy entry list; without a token, it is the
+    org's public graph (nodes, plus parent_child and connection edges), since
+    the backend has no public hierarchy route.
     """
     if anonymous():
         _public_tree(org, fmt)
