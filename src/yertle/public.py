@@ -16,23 +16,24 @@ anonymous callers cannot probe which org ids exist. The 404 surfaces as
 
 Kept as its own module, rather than as a `public=True` flag on `yertle.orgs`
 and `yertle.nodes`, because the two surfaces are not the same shape. There is
-no public route for an org's hierarchy or for its search, and a public read
-returns less than a member's: `get_org()` has no role or invite settings.
+no public route for an org's search, and a public read can return less than a
+member's: `get_org()` has no role or invite settings.
 """
 
 from __future__ import annotations
 
 from yertle_client.api.public import (
-    get_public_org_graph_public_orgs_org_id_graph_get,
+    get_public_org_hierarchy_public_orgs_org_id_hierarchy_get,
     get_public_org_nodes_public_orgs_org_id_nodes_get,
     get_public_org_public_orgs_org_id_get,
     get_public_tree_document_public_orgs_org_id_nodes_node_id_tree_branch_get,
 )
 from yertle_client.models import (
+    HierarchyEntryResponse,
+    HierarchyResponse,
     NodeListResponse,
     NodeResponse,
     NodeTreeDocument,
-    OrgGraphResponse,
     PublicOrganizationResponse,
 )
 
@@ -41,10 +42,7 @@ from yertle._ids import wire_org_id
 from yertle._paging import PAGE_SIZE, all_nodes
 from yertle.nodes import DEFAULT_BRANCH
 
-__all__ = ["PARENT_CHILD", "get_node", "get_org", "graph", "list_nodes"]
-
-#: `GraphEdge.edge_type` for containment, as opposed to `"connection"`.
-PARENT_CHILD = "parent_child"
+__all__ = ["get_node", "get_org", "hierarchy", "list_nodes"]
 
 
 def get_org(org_id: str) -> PublicOrganizationResponse:
@@ -69,27 +67,26 @@ def get_org(org_id: str) -> PublicOrganizationResponse:
     return response
 
 
-def graph(org_id: str) -> OrgGraphResponse:
-    """Fetch a public organization's whole graph: every node and every edge.
+def hierarchy(org_id: str) -> list[HierarchyEntryResponse]:
+    """Return a public organization's containment hierarchy as a flat list of entries.
 
-    Edges are of two kinds, told apart by `edge_type`. A `PARENT_CHILD` edge
-    runs from a node to a node it contains; a `"connection"` edge is an arrow
-    drawn between two nodes on a canvas. The containment edges are the same
-    hierarchy that `yertle.nodes.tree()` returns for a member, as edges
-    rather than as paths.
+    The public counterpart of `yertle.nodes.tree()`, and the same response:
+    the backend runs one query for both routes, so anything that renders a
+    member's hierarchy renders this. Each entry carries the path of its
+    *parent*; a node with two parents appears once under each.
 
-        >>> graph = yertle.public.graph(org_id)
-        >>> contains = [e for e in graph.edges if e.edge_type == yertle.public.PARENT_CHILD]
+        >>> for entry in yertle.public.hierarchy(org_id):
+        ...     print(entry.depth, entry.path, entry.title)
 
     Raises `ValueError` if `org_id` is not a UUID.
     """
-    response = get_public_org_graph_public_orgs_org_id_graph_get.sync(
+    response = get_public_org_hierarchy_public_orgs_org_id_hierarchy_get.sync(
         client=anonymous_client(),
         org_id=wire_org_id(org_id),
     )
-    if not isinstance(response, OrgGraphResponse):
-        raise RuntimeError(f"Unexpected response from public.graph({org_id!r}): {response!r}")
-    return response
+    if not isinstance(response, HierarchyResponse):
+        raise RuntimeError(f"Unexpected response from public.hierarchy({org_id!r}): {response!r}")
+    return response.entries
 
 
 def list_nodes(org_id: str) -> list[NodeResponse]:

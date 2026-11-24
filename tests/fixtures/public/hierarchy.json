@@ -1,20 +1,20 @@
 {
   "entries": [
     {
-      "node_id": "00000000-0000-4000-8000-000000000001",
-      "title": "Root",
-      "path": "/",
-      "depth": 0,
-      "is_directory": true,
-      "org_id": "00000000-0000-4000-8000-000000000002",
-      "org_name": null
-    },
-    {
       "node_id": "00000000-0000-4000-8000-000000000007",
       "title": "Scratchpad",
       "path": "/",
       "depth": 0,
       "is_directory": false,
+      "org_id": "00000000-0000-4000-8000-000000000002",
+      "org_name": null
+    },
+    {
+      "node_id": "00000000-0000-4000-8000-000000000001",
+      "title": "Root",
+      "path": "/",
+      "depth": 0,
+      "is_directory": true,
       "org_id": "00000000-0000-4000-8000-000000000002",
       "org_name": null
     },

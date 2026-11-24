@@ -14,7 +14,6 @@ from yertle_client.models import (
     HierarchyEntryResponse,
     NodeResponse,
     NodeTreeDocument,
-    OrgGraphResponse,
     PushStateResponse,
 )
 from yertle_client.types import Unset
@@ -203,89 +202,22 @@ def _build_tree(entries: list[HierarchyEntryResponse], label: str) -> Tree:
     return tree
 
 
-def _graph_tree(graph: OrgGraphResponse, label: str) -> Tree:
-    """Assemble a Rich tree from a public org's containment edges.
-
-    There is no public hierarchy route, so an anonymous `nodes tree` builds
-    the same picture from the graph instead: the backend derives the
-    hierarchy from exactly these parent-child edges. A node with two parents
-    appears under both, as it does in the hierarchy.
-
-    Roots are the nodes nothing contains. A cycle has no root, so whatever a
-    walk from the roots did not reach is started from at the top level too —
-    otherwise those nodes would silently vanish. The ancestor set stops the
-    walk from following a cycle round forever.
-    """
-    titles = {node.id: node.title for node in graph.nodes}
-    children_of: dict[str, list[str]] = defaultdict(list)
-    for edge in graph.edges:
-        if (
-            edge.edge_type == yertle.public.PARENT_CHILD
-            and {edge.source, edge.target} <= titles.keys()
-        ):
-            children_of[edge.source].append(edge.target)
-
-    def by_title(node_ids: builtins.list[str]) -> builtins.list[str]:
-        return sorted(node_ids, key=lambda node_id: (titles[node_id], node_id))
-
-    shown: set[str] = set()
-
-    def grow(parent: Tree, node_id: str, ancestors: frozenset[str]) -> None:
-        shown.add(node_id)
-        branch = parent.add(f"{titles[node_id]}  [dim]{node_id}[/dim]")
-        for child in by_title(children_of[node_id]):
-            if child not in ancestors:
-                grow(branch, child, ancestors | {child})
-
-    tree = Tree(label)
-    contained = {child for children in children_of.values() for child in children}
-    for root in by_title([node_id for node_id in titles if node_id not in contained]):
-        grow(tree, root, frozenset({root}))
-    for node_id in by_title(builtins.list(titles)):
-        if node_id not in shown:
-            grow(tree, node_id, frozenset({node_id}))
-    return tree
-
-
-def _public_tree(org: str | None, fmt: Format) -> None:
-    """`nodes tree` without a token. JSON output is the graph it was built from.
-
-    Printed unchanged rather than reshaped into hierarchy entries: the
-    backend computes entry paths with its own rules for cycles and nodes with
-    several parents, and a copy of those rules here would drift from them.
-    """
-    org_id = resolve_public_org(org)
-    with api_errors(public=True):
-        graph = yertle.public.graph(org_id)
-
-    if fmt is Format.JSON:
-        dump_json(graph)
-        return
-    if not graph.nodes:
-        typer.echo("No nodes found.")
-        return
-    label = f"Hierarchy in public org {org_id} ({len(graph.nodes)})"
-    Console().print(_graph_tree(graph, label))
-
-
 @app.command("tree")
 def tree_nodes(org: OrgOption = None, fmt: FormatOption = Format.TABLE) -> None:
     """Show the containment hierarchy — what contains what.
 
-    Without a token, shows a public organization named with --org. The drawn
-    tree looks the same either way, but [bold]--format json differs[/bold]:
-    logged in, it is the flat hierarchy entry list; without a token, it is the
-    org's public graph (nodes, plus parent_child and connection edges), since
-    the backend has no public hierarchy route.
+    Without a token, shows a public organization named with --org.
     """
     if anonymous():
-        _public_tree(org, fmt)
-        return
-
-    org_id = resolve_org(org)
-
-    with api_errors():
-        entries = yertle.nodes.tree(org_id)
+        org_id = resolve_public_org(org)
+        scope = f"public org {org_id}"
+        with api_errors(public=True):
+            entries = yertle.public.hierarchy(org_id)
+    else:
+        org_id = resolve_org(org)
+        scope = "all organizations" if org_id == yertle.nodes.ALL_ORGS else f"org {org_id}"
+        with api_errors():
+            entries = yertle.nodes.tree(org_id)
 
     if fmt is Format.JSON:
         dump_json(entries)
@@ -295,8 +227,6 @@ def tree_nodes(org: OrgOption = None, fmt: FormatOption = Format.TABLE) -> None:
         typer.echo("No nodes found.")
         return
 
-    across_orgs = org_id == yertle.nodes.ALL_ORGS
-    scope = "all organizations" if across_orgs else f"org {org_id}"
     Console().print(_build_tree(entries, f"Hierarchy in {scope} ({len(entries)})"))
 
 

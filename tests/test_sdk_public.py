@@ -21,27 +21,33 @@ from tests._public_api import (
 from yertle._client import anonymous_client
 
 
-def test_graph_reads_the_public_route_without_a_token(public_api: PublicAPI) -> None:
-    public_api.serve(f"/public/orgs/{ORG}/graph", fixture("graph.json"))
+def test_hierarchy_reads_the_public_route_without_a_token(public_api: PublicAPI) -> None:
+    public_api.serve(f"/public/orgs/{ORG}/hierarchy", fixture("hierarchy.json"))
 
-    graph = yertle.public.graph(ORG)
+    entries = yertle.public.hierarchy(ORG)
 
-    assert graph.org_name == "Example public org"
-    assert {node.id for node in graph.nodes} == {ROOT, PAYMENTS, LEDGER, CHECKOUT, AUTH, SCRATCHPAD}
-    contains = {
-        (edge.source, edge.target)
-        for edge in graph.edges
-        if edge.edge_type == yertle.public.PARENT_CHILD
-    }
-    assert contains == {
-        (ROOT, PAYMENTS),
-        (ROOT, CHECKOUT),
-        (ROOT, AUTH),
-        (PAYMENTS, LEDGER),
-        (CHECKOUT, LEDGER),
+    assert {(entry.path, entry.title, entry.node_id) for entry in entries} == {
+        ("/", "Root", ROOT),
+        ("/", "Scratchpad", SCRATCHPAD),
+        ("/Root", "Checkout API", CHECKOUT),
+        ("/Root", "Payments", PAYMENTS),
+        ("/Root", "Auth / Sessions", AUTH),
+        ("/Root/Checkout API", "Ledger DB", LEDGER),
+        ("/Root/Payments", "Ledger DB", LEDGER),
     }
     (request,) = public_api.requests
+    assert request.url.path == f"/public/orgs/{ORG}/hierarchy"
     assert "authorization" not in request.headers
+
+
+def test_hierarchy_is_the_member_response_of_the_same_org(public_api: PublicAPI) -> None:
+    """Captured from one org: anonymously, and by its owner. The routes share a query."""
+    public_api.serve(f"/public/orgs/{ORG}/hierarchy", fixture("hierarchy.json"))
+
+    entries = yertle.public.hierarchy(ORG)
+
+    member: Any = fixture("hierarchy_member.json")
+    assert [entry.to_dict() for entry in entries] == member["entries"]
 
 
 def test_list_nodes_returns_every_node(public_api: PublicAPI) -> None:
@@ -122,13 +128,15 @@ def test_get_node_reads_the_branch_it_is_given(public_api: PublicAPI) -> None:
 
 def test_a_private_or_missing_org_raises_404(public_api: PublicAPI) -> None:
     with pytest.raises(UnexpectedStatus) as excinfo:
-        yertle.public.graph(ORG)
+        yertle.public.hierarchy(ORG)
     assert excinfo.value.status_code == 404
+    (request,) = public_api.requests
+    assert "authorization" not in request.headers
 
 
 def test_a_non_uuid_org_id_is_refused_before_a_request(public_api: PublicAPI) -> None:
     with pytest.raises(ValueError):
-        yertle.public.graph("not-a-uuid")
+        yertle.public.hierarchy("not-a-uuid")
     assert public_api.requests == []
 
 
