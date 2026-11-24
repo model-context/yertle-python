@@ -162,18 +162,19 @@ def test_branch_commands_look_the_organization_up(
 @patch(_LIST)
 @patch("yertle._client.get_client", return_value=object())
 def test_a_malformed_node_id_never_reaches_the_wire(_client, list_sync, delete_sync) -> None:
-    """Catch a bad id locally instead of relaying `400 badly formed ... UUID`.
+    """Catch a bad id locally instead of relaying the backend's 404.
 
-    That backend message does not say which id was wrong — a branch command
-    sends two — and reads like a server fault rather than a typo. The real
-    way this happens is a truncated copy-paste, so the length is named.
+    A truncated id of 8 or more characters is a short id now (#60), but one
+    of 7 is not: the backend would pass it through unresolved and answer 404,
+    which reads as "no such node" rather than "too short". So the minimum
+    length is named.
     """
-    truncated = NODE[:-1]
+    truncated = NODE[:7]
     result = runner.invoke(app, ["branches", "delete", truncated, "feature", "--org", ORG])
     assert result.exit_code == 1
     plain_out = plain(result.output)
     assert "is not a node id" in plain_out
-    assert "35 characters" in plain_out
+    assert "at least its first 8 characters" in plain_out
     delete_sync.assert_not_called()
     list_sync.assert_not_called()
 

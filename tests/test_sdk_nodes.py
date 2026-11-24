@@ -19,6 +19,8 @@ from yertle_client.models import (
 
 import yertle
 from tests._public_api import PRIVATE_NODE, PRIVATE_ORG, PublicAPI, fixture, install_member
+from tests._short_ids import FULL_NODE, SHORT_NODE
+from tests._short_ids import fixture as short_ids_fixture
 
 
 def _node(node_id: str) -> NodeResponse:
@@ -191,11 +193,22 @@ def test_locate_of_a_node_you_cannot_see_raises_404(public_api: PublicAPI) -> No
     assert excinfo.value.status_code == 404
 
 
-def test_locate_refuses_a_short_id_before_a_request(public_api: PublicAPI) -> None:
-    """The backend matches prefixes with a token; the SDK takes full ids only, for now."""
+def test_locate_sends_a_short_id_and_answers_with_the_full_one(public_api: PublicAPI) -> None:
+    """The signed-in lookup resolves a short id (#60); captured from a real backend."""
+    install_member(public_api, "yrt_member")
+    public_api.serve(f"/nodes/{SHORT_NODE}", short_ids_fixture("node_location.json"))
+
+    where = yertle.nodes.locate(SHORT_NODE.upper())
+
+    assert where.node_id == FULL_NODE
+    (request,) = public_api.requests
+    assert request.url.path == f"/nodes/{SHORT_NODE}"
+
+
+def test_locate_refuses_a_too_short_id_before_a_request(public_api: PublicAPI) -> None:
     install_member(public_api, "yrt_member")
     with pytest.raises(ValueError):
-        yertle.nodes.locate(PRIVATE_NODE[:8])
+        yertle.nodes.locate(PRIVATE_NODE[:7])
     assert public_api.requests == []
 
 

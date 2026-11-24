@@ -1,0 +1,23 @@
+{
+  "query": "payments",
+  "matches": [
+    {
+      "node_id": "ab7bd00e-0000-4000-8000-000000000002",
+      "title": "Payments API",
+      "score": 0.075990885,
+      "match_reason": "fts"
+    }
+  ],
+  "nodes": [
+    {
+      "node_id": "ab7bd00e-0000-4000-8000-000000000002",
+      "title": "Payments API",
+      "description": "demo",
+      "path": [],
+      "tags": {},
+      "directories": [],
+      "text_content": null
+    }
+  ],
+  "connections": []
+}

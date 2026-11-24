@@ -302,6 +302,17 @@ def test_orgs_show_survives_a_backfill_miss(_get_client, _get, _list) -> None:
     assert "—" in result.output
 
 
+@patch(_LIST_ORGS, return_value=_summary_list())
+@patch(_GET_ORG, return_value=_detail())
+@patch("yertle._client.get_client", return_value=object())
+def test_orgs_show_backfills_an_org_named_by_a_short_id(_get_client, get_org, _list) -> None:
+    """The backfill matches on the id the backend returned, not the one typed (#60)."""
+    result = runner.invoke(app, ["orgs", "show", ORG_ID[:8]])
+    assert result.exit_code == 0, result.output
+    assert get_org.call_args.kwargs["org_id"] == ORG_ID[:8]
+    assert "owner" in result.output
+
+
 def test_orgs_group_listing_mentions_how_to_clear() -> None:
     """`yertle orgs` must name 'all' as the way out of a scoped default.
 

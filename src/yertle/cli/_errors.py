@@ -7,6 +7,7 @@ this package is most likely to grow as commands are added.
 """
 
 import json
+import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from http import HTTPStatus
@@ -88,6 +89,50 @@ def _detail_of(content: bytes) -> str | None:
     return detail
 
 
+# The backend's wording for a short id that matches more than one org or node
+# (`api/id_prefix.py`, and `GET /nodes/{id}`). Only the signed-in node lookup
+# lists the matches: everywhere else the prefix is resolved before
+# authentication, so listing them would show ids to anyone.
+_AMBIGUOUS = re.compile(
+    r"^(?P<kind>Organization|Node) ID prefix '(?P<prefix>[^']*)' matches more than one "
+    r"\w+(?:: (?P<candidates>.*))?\. Use more characters, or the full ID\.$",
+    re.DOTALL,
+)
+# Splits the candidate list between entries: "<uuid> (<title>, in <org>)".
+_NEXT_CANDIDATE = re.compile(r"(?<=\)), (?=[0-9a-f]{8}-)")
+
+
+def ambiguous_id_message(exc: UnexpectedStatus) -> str | None:
+    """Explain a 409 for an ambiguous short id the way git does, or return None.
+
+    `git show ab7b` answers "short object ID ab7b is ambiguous". The 409 is
+    the same situation, and the fix is the same, so the message is too. It
+    names no backend URL: unlike a 401 or a 403, the cause here is never the
+    configuration, always the id.
+
+    Returns None for any other 409 (a branch that already exists, say), which
+    then gets the generic message.
+    """
+    if exc.status_code != HTTPStatus.CONFLICT:
+        return None
+    try:
+        detail = json.loads(exc.content).get("detail")
+    except (ValueError, TypeError, AttributeError):
+        return None
+    match = _AMBIGUOUS.match(detail) if isinstance(detail, str) else None
+    if match is None:
+        return None
+    lines = [
+        f"Short ID '{match['prefix']}' is ambiguous: it matches more than one "
+        f"{match['kind'].lower()}.",
+        "  Use more characters, or the full ID.",
+    ]
+    if candidates := match["candidates"]:
+        lines.append("  It matches:")
+        lines.extend(f"    {entry}" for entry in _NEXT_CANDIDATE.split(candidates))
+    return "\n".join(lines)
+
+
 def die(message: str) -> NoReturn:
     """Print a message to stderr and exit non-zero.
 
@@ -138,6 +183,8 @@ def api_errors(*, public: bool = False) -> Iterator[None]:
     except auth.AuthError as exc:
         die(str(exc))
     except UnexpectedStatus as exc:
+        if ambiguous := ambiguous_id_message(exc):
+            die(ambiguous)
         if public and exc.status_code == HTTPStatus.NOT_FOUND:
             die(public_not_found_message())
         die(api_error_message(exc))
@@ -147,4 +194,10 @@ def api_errors(*, public: bool = False) -> Iterator[None]:
         die(f"Unexpected response from the API: {exc}")
 
 
-__all__ = ["api_error_message", "api_errors", "die", "public_not_found_message"]
+__all__ = [
+    "ambiguous_id_message",
+    "api_error_message",
+    "api_errors",
+    "die",
+    "public_not_found_message",
+]

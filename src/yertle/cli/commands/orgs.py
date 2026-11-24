@@ -8,6 +8,7 @@ from yertle_client.models import OrganizationResponse, PublicOrganizationRespons
 from yertle_client.types import Unset
 
 import yertle
+from yertle._ids import is_short_id
 from yertle.cli._context import (
     ALL_ORGS,
     anonymous,
@@ -25,6 +26,7 @@ from yertle.cli._render import (
     dump_json,
     fields,
     render,
+    short_id,
 )
 from yertle.shared import auth
 
@@ -50,12 +52,8 @@ def _visibility(org: OrganizationResponse) -> str:
 # `role` already, so none of these costs an extra request — only
 # `invite_mode` is null on this endpoint, which is why `show` still merges
 # (see `_merged`).
-#
-# This overflows an 80-column terminal: the id alone is 36 characters. Left
-# that way deliberately for now — see docs/todo/todo.txt item 2, which tracks
-# the short-identifier work that would make it fit.
 COLUMNS: list[Column[OrganizationResponse]] = [
-    Column("ID", lambda org: str(org.id), style="cyan", no_wrap=True),
+    Column("ID", lambda org: short_id(org.id), style="cyan", no_wrap=True),
     Column("Name", lambda org: org.name),
     Column("Members", lambda org: _optional(org.member_count), justify="right"),
     Column("Nodes", lambda org: _optional(org.node_count), justify="right"),
@@ -82,7 +80,9 @@ def list_orgs(fmt: FormatOption = Format.TABLE) -> None:
 def use_org(
     org: Annotated[
         str,
-        typer.Argument(help=f"Organization id from `yertle orgs list`, or '{ALL_ORGS}'."),
+        typer.Argument(
+            help=f"Organization id from `yertle orgs list` (a short id will do), or '{ALL_ORGS}'."
+        ),
     ],
 ) -> None:
     """Set the default organization, or 'all' to clear it.
@@ -104,15 +104,40 @@ def use_org(
 
     Pass 'all' to go back to every organization; that is the way to undo a
     previous choice without hand-editing the config file.
+
+    A short id is resolved to the full one before it is saved. Stored as
+    typed, it would be resolved afresh by every later command, and could
+    start meaning a different org, or none, as orgs are created.
     """
     value = validate_org(org.strip())
+    name = None
+    if is_short_id(value):
+        value, name = _resolve_org(value)
     auth.save_org(value)
 
     where = display_path(auth.CONFIG_PATH)
     if value == ALL_ORGS:
         typer.echo(f"✓ Default organization cleared — commands will use every org ({where})")
         return
-    typer.echo(f"✓ Default organization set to {value} ({where})")
+    named = f" ({name})" if name else ""
+    typer.echo(f"✓ Default organization set to {value}{named} ({where})")
+
+
+def _resolve_org(short: str) -> tuple[str, str]:
+    """Return the full id and name of the org a short id names.
+
+    The same read `orgs show` makes, so it works for exactly the orgs that
+    command can show: your own, and a public one, signed in or not.
+    """
+    if anonymous():
+        with api_errors(public=True):
+            public_org = yertle.public.get_org(short)
+        return public_org.id, public_org.name
+    with api_errors():
+        org, _ = member_or_public(
+            lambda: yertle.orgs.get(short), lambda: yertle.public.get_org(short)
+        )
+    return org.id, org.name
 
 
 def _optional(value: object) -> str:
@@ -143,8 +168,10 @@ def _merged(org_id: str) -> OrganizationResponse:
     org = yertle.orgs.get(org_id)
     if org.role is not None and not isinstance(org.role, Unset):
         return org
+    # Compare with the id the backend returned, not the one typed: that may
+    # be a short id, and would then match nothing.
     for candidate in yertle.orgs.list():
-        if str(candidate.id) == org_id:
+        if str(candidate.id) == str(org.id):
             org.role = candidate.role
             org.member_count = candidate.member_count
             break

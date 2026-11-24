@@ -16,6 +16,8 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from yertle._ids import MIN_SHORT_ID
+
 
 class Format(StrEnum):
     """Output formats every data command supports."""
@@ -127,6 +129,23 @@ def fields(rows: Sequence[tuple[str, str]], *, indent: str = "  ") -> None:
         console.print(f"{indent}[bold]{label:<{width}}[/bold]  {value}", soft_wrap=True)
 
 
+def short_id(value: object) -> str:
+    """Abbreviate an id for a table cell, the way git abbreviates a SHA in a listing.
+
+    Eight characters is the shortest id the backend resolves (`MIN_SHORT_ID`),
+    so an org or node id shown here can be pasted straight back into a
+    command. A full UUID is 36 characters, and a table with two of them
+    pushed the title off an 80-column terminal. `--format json` keeps the
+    whole id, for scripts.
+
+    Not extended to stay unique, as git does: eight hex characters collide
+    by chance only in an org of tens of thousands of nodes, and a collision
+    is a clear "ambiguous" error rather than a wrong answer.
+    """
+    text = str(value) if value else ""
+    return text[:MIN_SHORT_ID] if text else "—"
+
+
 def display_path(path: Path) -> str:
     """Render a path with `$HOME` collapsed to `~` for compact output."""
     try:
@@ -145,4 +164,5 @@ __all__ = [
     "dump_json",
     "fields",
     "render",
+    "short_id",
 ]

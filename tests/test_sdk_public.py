@@ -186,7 +186,8 @@ def test_locate_of_a_private_or_missing_node_raises_404(public_api: PublicAPI) -
     assert excinfo.value.status_code == 404
 
 
-def test_locate_refuses_a_non_uuid_before_a_request(public_api: PublicAPI) -> None:
+def test_locate_refuses_a_short_id_before_a_request(public_api: PublicAPI) -> None:
+    """The anonymous lookup takes full ids only: the backend 404s a short one."""
     with pytest.raises(ValueError):
         yertle.public.locate(PAYMENTS[:8])
     assert public_api.requests == []

@@ -1,0 +1,31 @@
+{
+  "expected_head_commit": "00000000-0000-4000-8000-0000000000aa",
+  "message": "",
+  "state": {
+    "node": {
+      "title": "Payments API",
+      "description": "demo",
+      "metadata": {}
+    },
+    "tags": {},
+    "directories": [],
+    "visual_properties": [],
+    "connections": []
+  },
+  "status": {
+    "node_id": "ab7bd00e-0000-4000-8000-000000000002",
+    "org_id": "dc047318-0000-4000-8000-000000000001",
+    "branch": "main",
+    "created_at": "2026-11-21T13:52:02.876602-05:00",
+    "parents": [],
+    "ingress": [],
+    "egress": [],
+    "counts": {
+      "children": 0,
+      "connections": 0,
+      "parents": 0,
+      "ingress": 0,
+      "egress": 0
+    }
+  }
+}
