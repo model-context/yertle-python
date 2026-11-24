@@ -5,9 +5,13 @@ should fail the same way when it can't get an answer — so the chain lives here
 rather than being re-derived per command.
 
 There are two chains. A command that starts from an organization (`nodes
-list`, `nodes create`) resolves flag → env → config → every org. A command
-that takes a node id asks the backend which org the node is in, because the
-node already knows; see `resolve_node()`.
+list`, `nodes create`) resolves flag → env → every org. A command that takes
+a node id asks the backend which org the node is in, because the node already
+knows; see `resolve_node()`.
+
+There is no saved default org. `yertle orgs use` used to write one to
+`config.json`, and it silently narrowed `nodes list` and `nodes tree` for as
+long as it stayed there. `$YERTLE_ORG` does the same job in plain sight.
 
 The chain mirrors how `shared/auth.py` resolves the token and API URL, because
 "which org" is the same kind of question as "which backend": per-key
@@ -31,11 +35,11 @@ from yertle_client.models import NodeLocationResponse
 
 import yertle
 from yertle._ids import MIN_SHORT_ID, is_short_id
-from yertle.cli._errors import api_error_message, api_errors, die
+from yertle.cli._errors import api_errors, die
 from yertle.cli._render import short_id
 from yertle.nodes import ALL_ORGS
 from yertle.shared import auth
-from yertle.shared.auth import Source, configured_org
+from yertle.shared.auth import Source
 
 ORG_ENV_VAR = "YERTLE_ORG"
 
@@ -44,8 +48,7 @@ OrgOption = Annotated[
     typer.Option(
         "--org",
         "-o",
-        help=f"Organization to act on, or 'all'. Defaults to ${ORG_ENV_VAR}, "
-        f"then `yertle orgs use`, then 'all'.",
+        help=f"Organization to act on, or 'all'. Defaults to ${ORG_ENV_VAR}, then 'all'.",
     ),
 ]
 
@@ -58,23 +61,21 @@ SingleOrgOption = Annotated[
     typer.Option(
         "--org",
         "-o",
-        help=f"Organization to act on. Defaults to ${ORG_ENV_VAR}, then "
-        f"`yertle orgs use`. This command acts on one org, so 'all' is not valid.",
+        help=f"Organization to act on. Defaults to ${ORG_ENV_VAR}, then your only org "
+        f"if you belong to just one. 'all' is not valid here.",
     ),
 ]
 
 
 # A command that takes a node id learns the org from the node, so `--org` is
-# optional there and only checked. The help says so, and says that `orgs use`
-# does not reach these commands, because that is the surprising part.
+# optional there and only checked.
 NodeOrgOption = Annotated[
     str | None,
     typer.Option(
         "--org",
         "-o",
         help=f"Organization the node is in. Looked up from the node when not given; "
-        f"if given, or ${ORG_ENV_VAR} is set, it must match. `yertle orgs use` "
-        f"does not apply.",
+        f"if given, or ${ORG_ENV_VAR} is set, it must match.",
     ),
 ]
 
@@ -133,7 +134,7 @@ class ResolvedOrg:
 def resolve_org_setting(override: str | None = None) -> ResolvedOrg:
     """Resolve the organization with provenance, without validating its shape.
 
-    Precedence: `--org` flag > `$YERTLE_ORG` > config file > every org.
+    Precedence: `--org` flag > `$YERTLE_ORG` > every org.
 
     Blank values at any rung are treated as *unset* rather than as a malformed
     id, so `YERTLE_ORG=` in a sourced env file falls through instead of
@@ -143,13 +144,31 @@ def resolve_org_setting(override: str | None = None) -> ResolvedOrg:
     commands: `yertle nodes list` with no arguments should show you your world,
     not a usage error.
     """
+    _forget_saved_org()
     if value := (override or "").strip():
         return ResolvedOrg(value, Source.FLAG)
     if value := os.environ.get(ORG_ENV_VAR, "").strip():
         return ResolvedOrg(value, Source.ENV)
-    if value := (configured_org() or "").strip():
-        return ResolvedOrg(value, Source.CONFIG)
     return ResolvedOrg(ALL_ORGS, Source.DEFAULT)
+
+
+def _forget_saved_org() -> None:
+    """Remove a default saved by the old `yertle orgs use`, saying so once.
+
+    Ignoring it silently would leave a user wondering why `nodes list` got
+    wider; honouring it would keep the hidden state this removal is for. So
+    the first command that would have read it deletes it from `config.json`
+    and says what replaces it, on stderr, so JSON output stays clean.
+    """
+    if (saved := auth.forget_saved_org()) is None:
+        return
+    typer.secho(
+        f"Removed the default organization saved by `yertle orgs use` ({short_id(saved)}).\n"
+        f"  It is no longer used. Pass --org {short_id(saved)}, or set "
+        f"{ORG_ENV_VAR}={short_id(saved)} for a whole shell.",
+        dim=True,
+        err=True,
+    )
 
 
 def validate_org(value: str) -> str:
@@ -177,30 +196,34 @@ def resolve_org(override: str | None = None) -> str:
 
 
 def resolve_one_org(override: str | None, *, command: str) -> str:
-    """Resolve to exactly one organization, exiting if the answer is 'all'.
+    """Resolve to exactly one organization: named, or the only one you have.
 
     The default chain ends at `ALL_ORGS`, which suits a listing and cannot
-    work for a command scoped to a single org. More than one command needs
-    this; naming `command` keeps the error specific while the wording stays
-    in one place. Commands that take a node id use `resolve_node()`.
+    work for a command scoped to a single org. When nothing was named, a
+    caller who belongs to exactly one org means that one, so it is used: the
+    most common user never needs `--org` at all. With several, the command
+    asks, naming `command` so the error is specific. Commands that take a
+    node id use `resolve_node()`.
     """
     org_id = resolve_org(override)
-    if org_id == ALL_ORGS:
-        die(
-            f"`{command}` needs one organization.\n"
-            f"  Pass --org <id>, or set a default with `yertle orgs use <id>`.",
-        )
-    return org_id
+    if org_id != ALL_ORGS:
+        return org_id
+    with api_errors():
+        orgs = yertle.orgs.list()
+    if len(orgs) == 1:
+        return str(orgs[0].id)
+    have = "no organizations" if not orgs else f"{len(orgs)} organizations"
+    die(
+        f"`{command}` needs one organization, and you belong to {have}.\n"
+        f"  Pass --org <id> (see `yertle orgs list`), or set ${ORG_ENV_VAR}.",
+    )
 
 
 def explicit_node_org(override: str | None = None) -> ResolvedOrg | None:
     """The organization the caller named for a command on a node, if any, unvalidated.
 
-    Only `--org` and `$YERTLE_ORG` count, decided before any request. The
-    `yertle orgs use` default does not: it is a standing choice for commands
-    that start from an org, and applying it here would turn every node
-    outside that org into a mismatch error. 'all' names no organization, so
-    it constrains nothing and the lookup decides.
+    Only `--org` and `$YERTLE_ORG` count, decided before any request. 'all'
+    names no organization, so it constrains nothing and the lookup decides.
     """
     # #61 puts an org written into the node argument itself first in line,
     # ahead of the flag.
@@ -264,18 +287,14 @@ def resolve_node(node_id: str, override: str | None, *, public: bool = False) ->
     as one by `api_errors`.
 
     A short node id goes through the same lookup, which answers with the full
-    id, except where the lookup will not match one: the anonymous lookup takes
-    full ids only, and the signed-in one matches short ids only in the
-    caller's own orgs, so that neither can be used to probe for nodes. In
-    those two cases a named org stands in, and the id is resolved inside it,
-    through the org's public routes (`_resolve_in_public_org`).
+    id. Signed in, the backend matches it in your own orgs first, then in
+    public ones; without a token, in public orgs only (yertle#608).
     """
     named = explicit_node_org(override)
     if named is not None:
         validate_org(named.value)
-    location = _locate(node_id, named, public=public)
-    if isinstance(location, ResolvedNode):
-        return location
+    with api_errors(public=public):
+        location = yertle.public.locate(node_id) if public else yertle.nodes.locate(node_id)
     if named is None:
         return ResolvedNode(
             location.node_id, ResolvedOrg(location.org_id, Source.LOOKUP), _title(location)
@@ -290,61 +309,6 @@ def resolve_node(node_id: str, override: str | None, *, public: bool = False) ->
         )
     return ResolvedNode(
         location.node_id, ResolvedOrg(location.org_id, named.source), _title(location)
-    )
-
-
-def _locate(
-    node_id: str, named: ResolvedOrg | None, *, public: bool
-) -> NodeLocationResponse | ResolvedNode:
-    """Look the node up; for a short id the lookup cannot match, resolve it in `named`.
-
-    Returns the lookup's answer, or, when it came from the named org, the
-    node already resolved there, which needs no org check.
-    """
-    short = is_short_id(node_id)
-    if public and short:
-        if named is None:
-            die(
-                "Without a token, a short node id needs its organization.\n"
-                "  Pass --org <id>, use the full node id, or run `yertle login`.",
-            )
-        with api_errors(public=True):
-            return _resolve_in_public_org(node_id, named)
-
-    with api_errors(public=public):
-        try:
-            return yertle.public.locate(node_id) if public else yertle.nodes.locate(node_id)
-        except UnexpectedStatus as missing:
-            if not short or missing.status_code != HTTPStatus.NOT_FOUND:
-                raise
-            if named is None:
-                die(
-                    f"{api_error_message(missing)}\n"
-                    f"  A short id matches only nodes in organizations you belong to.\n"
-                    f"  For a node in a public organization, pass --org <id> or the full id.",
-                )
-            # Signed in, but the node is not in one of your orgs: perhaps it
-            # is in the public one you named. If not there either, the
-            # original 404 is the answer.
-            try:
-                return _resolve_in_public_org(node_id, named)
-            except UnexpectedStatus as public_failure:
-                if public_failure.status_code == HTTPStatus.NOT_FOUND:
-                    raise missing from None
-                raise
-
-
-def _resolve_in_public_org(node_id: str, named: ResolvedOrg) -> ResolvedNode:
-    """Resolve a short node id inside a named public organization.
-
-    The org-scoped public routes resolve a short node id within the org in
-    the path, for anyone. The node's document is the read that echoes both
-    full ids back; it costs a request a node lookup would have cost anyway.
-    """
-    doc = yertle.public.get_node(node_id, org_id=named.value)
-    status = doc.status
-    return ResolvedNode(
-        status.node_id, ResolvedOrg(status.org_id, named.source), doc.state.node.title or None
     )
 
 

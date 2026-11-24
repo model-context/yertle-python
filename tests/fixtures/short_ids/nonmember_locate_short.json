@@ -1,3 +1,6 @@
 {
-  "detail": "Node not found"
+  "node_id": "ab7bd00e-0000-4000-8000-000000000002",
+  "org_id": "dc047318-0000-4000-8000-000000000001",
+  "org_name": "Short ID demo org",
+  "title": "Payments API"
 }

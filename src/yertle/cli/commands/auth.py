@@ -74,8 +74,8 @@ def status() -> None:
     # is "why *that* org", which is the provenance column.
     org = resolve_org_setting()
     # Commands that take a node id answer "which org" differently: the node
-    # says, and the config-file default does not apply. Without a named org
-    # there is no value to show until a command has a node to look up.
+    # says. Without a named org there is no value to show until a command has
+    # a node to look up.
     node_org = explicit_node_org()
     node_org_value, node_org_source = (
         (node_org.value, node_org.source) if node_org else ("—", auth.Source.LOOKUP)

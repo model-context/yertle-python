@@ -4,6 +4,8 @@ Precedence is the whole point of this module, so each rung of the chain gets
 its own case.
 """
 
+import json
+
 import pytest
 import typer
 
@@ -66,61 +68,54 @@ def test_a_malformed_id_exits_with_a_sentence() -> None:
     assert excinfo.value.exit_code == 1
 
 
-def _persist(org: str) -> None:
-    auth_mod.save_org(org)
+def _old_config(**keys: str) -> None:
+    """A config file as an earlier version left it: `orgs use` added `org`."""
+    auth_mod.CONFIG_PATH.write_text(json.dumps(keys))
 
 
-def test_config_is_used_when_no_flag_or_env() -> None:
-    _persist(ORG)
-    assert resolve_org(None) == ORG
+def test_a_saved_org_is_not_used(capsys: pytest.CaptureFixture[str]) -> None:
+    """The default `orgs use` saved no longer narrows anything."""
+    _old_config(org=ORG)
+    assert resolve_org(None) == "all"
 
 
-def test_env_var_beats_config(monkeypatch: pytest.MonkeyPatch) -> None:
-    _persist(ORG)
-    monkeypatch.setenv(ORG_ENV_VAR, OTHER)
-    assert resolve_org(None) == OTHER
+def test_a_saved_org_is_removed_once_and_said_so(capsys: pytest.CaptureFixture[str]) -> None:
+    _old_config(api_url="https://api.example.test", token="yrt_secret", org=ORG)
+
+    resolve_org(None)
+    first = capsys.readouterr()
+    resolve_org(None)
+    second = capsys.readouterr()
+
+    # Said on stderr, so `--format json` stays clean, and with the way back.
+    assert first.out == ""
+    assert "Removed the default organization saved by `yertle orgs use`" in first.err
+    assert f"--org {ORG[:8]}" in first.err and f"{ORG_ENV_VAR}={ORG[:8]}" in first.err
+    # Once: the key is gone, so there is nothing to say the second time.
+    assert second.err == ""
+    assert json.loads(auth_mod.CONFIG_PATH.read_text()) == {
+        "api_url": "https://api.example.test",
+        "token": "yrt_secret",
+    }
 
 
-def test_flag_beats_config(monkeypatch: pytest.MonkeyPatch) -> None:
-    _persist(OTHER)
-    monkeypatch.setenv(ORG_ENV_VAR, OTHER)
+def test_a_saved_org_is_removed_even_when_a_flag_wins(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _old_config(org=OTHER)
     assert resolve_org(ORG) == ORG
+    assert "Removed the default organization" in capsys.readouterr().err
+    assert "org" not in json.loads(auth_mod.CONFIG_PATH.read_text())
 
 
 def test_provenance_reports_the_winning_rung(monkeypatch: pytest.MonkeyPatch) -> None:
     """`auth status` renders this, so each rung must be distinguishable."""
     assert resolve_org_setting().source is Source.DEFAULT
 
-    _persist(ORG)
-    assert resolve_org_setting().source is Source.CONFIG
-
     monkeypatch.setenv(ORG_ENV_VAR, OTHER)
     assert resolve_org_setting().source is Source.ENV
 
     assert resolve_org_setting(ORG).source is Source.FLAG
-
-
-def test_saving_all_resets_to_every_org() -> None:
-    """`orgs use all` is how a previous choice is undone."""
-    _persist(ORG)
-    _persist("all")
-    assert resolve_org(None) == "all"
-
-
-def test_saving_an_org_preserves_credentials() -> None:
-    """Writing one setting must not drop another — the config merge path."""
-    auth_mod.save_credentials(api_url="https://api.example.test", token="yrt_secret")
-    _persist(ORG)
-    resolved = auth_mod.resolve()
-    assert resolved.token == "yrt_secret"
-    assert resolved.api_url == "https://api.example.test"
-    assert resolve_org(None) == ORG
-
-
-def test_a_node_command_ignores_the_orgs_use_default() -> None:
-    """The node says which org it is in; a saved default must not override that."""
-    _persist(ORG)
-    assert explicit_node_org() is None
 
 
 def test_a_node_command_takes_the_flag_then_the_env_var(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -133,13 +133,13 @@ def test_allowlist_only_names_commands_the_cli_actually_has():
 def test_allowlist_admits_no_write_commands():
     """CLAUDE.md invariant 3: the agent's tools are read-only.
 
-    `orgs use` writes ~/.yertle/config.json. While the gate keyed on the noun
-    alone, allowlisting `orgs` admitted every verb under it — including that
-    one. This pins the noun-verb gate so a future write verb cannot ride in on
+    `orgs create` and `orgs update` write. While the gate keyed on the noun
+    alone, allowlisting `orgs` admitted every verb under it — including
+    those. This pins the noun-verb gate so a future write verb cannot ride in on
     an already-trusted noun.
     """
-    writes = {("orgs", "use")}
+    writes = {("orgs", "create"), ("orgs", "update"), ("nodes", "create")}
     assert not (YERTLE_READ_COMMANDS & writes), (
         f"write commands in the read-only allowlist: {sorted(YERTLE_READ_COMMANDS & writes)}"
     )
-    assert writes <= _cli_noun_verbs(), "test is stale — `orgs use` no longer exists"
+    assert writes <= _cli_noun_verbs(), "test is stale — a listed write command no longer exists"

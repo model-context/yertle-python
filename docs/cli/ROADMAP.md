@@ -430,11 +430,15 @@ about partial failure.
 - #60 — every command takes a short id (8+ characters of a UUID) wherever it
   takes an org or node id, and tables show ids that short. The backend
   resolves them in paths; the CLI resolves a node to its full id once, in
-  `resolve_node()`, so nothing downstream sees a short id, and `orgs use`
-  stores the full id.
+  `resolve_node()`, so nothing downstream sees a short id.
 - #62 — commands that take a node id no longer take an org as well: they look
   it up from the node (`GET /nodes/{id}`, or `/public/nodes/{id}` without a
-  token). `--org` and `$YERTLE_ORG` become a check that must match, and the
-  `orgs use` default stops applying to them. Short id prefixes (#60) extend
+  token). `--org` and `$YERTLE_ORG` become a check that must match. Short id prefixes (#60) extend
   that resolver, now `resolve_node()` in `cli/_context.py`; an org written
   into the argument (#61) would too.
+- `yertle orgs use` removed. It saved a default org to `config.json`, which
+  after #62 applied to only four commands and silently narrowed two of them.
+  Short ids made `--org` cheap to type, and `$YERTLE_ORG` covers a standing
+  choice in plain sight. `nodes search` and `nodes create` use your only org
+  when you belong to one. Kept as a hidden command for one release that names
+  the replacement; a saved org is removed from the config with a notice.

@@ -107,8 +107,8 @@ def _read_config() -> dict[str, str]:
         ) from e
 
 
-def _write_config(updates: dict[str, str]) -> None:
-    """Merge `updates` into ~/.yertle/config.json.
+def _write_config(updates: dict[str, str], *, drop: tuple[str, ...] = ()) -> None:
+    """Merge `updates` into ~/.yertle/config.json, removing the keys in `drop`.
 
     Merges rather than replaces, so keys this version does not know about
     survive — and so writing one setting cannot drop another.
@@ -125,6 +125,8 @@ def _write_config(updates: dict[str, str]) -> None:
 
     config = _read_config()
     config.update(updates)
+    for key in drop:
+        config.pop(key, None)
 
     fd, tmp_name = tempfile.mkstemp(dir=CONFIG_PATH.parent, prefix=".config-", suffix=".json")
     tmp_path = Path(tmp_name)
@@ -144,28 +146,21 @@ def save_credentials(api_url: str, token: str) -> None:
     _write_config({"api_url": api_url, "token": token})
 
 
-def configured_org() -> str | None:
-    """Return the organization persisted in the config file, if any.
+def forget_saved_org() -> str | None:
+    """Remove a default org saved by `yertle orgs use`, returning it if there was one.
 
-    Org is not a credential, so its precedence chain lives with the other CLI
-    context in `cli/_context.py`. What lives *here* is the file access: this
-    module owns `~/.yertle/config.json`, and a second module reading or writing
-    it would fork the definition of where config lives (invariant 1).
+    `orgs use` is gone, and the org it saved is no longer read: a default
+    nobody can see was narrowing `nodes list` and `nodes tree` without
+    saying so. Config files written before still carry the key, so the CLI
+    removes it the first time it looks, and the caller says so once.
 
-    If a third non-credential key ever lands here, split the file-owning half
-    into `shared/config.py` and let this module consume it.
+    Lives here because this module owns `~/.yertle/config.json` (invariant 1).
     """
-    return _read_config().get("org") or None
-
-
-def save_org(org: str) -> None:
-    """Persist the default organization, leaving credentials untouched.
-
-    Reuses `save_credentials`' merge-and-atomically-replace path so the file
-    keeps its 0600 mode and an interrupted write cannot strand a config with a
-    token but no URL.
-    """
-    _write_config({"org": org})
+    org = _read_config().get("org")
+    if org is None:
+        return None
+    _write_config({}, drop=("org",))
+    return str(org) or None
 
 
 def resolve() -> ResolvedCredentials:

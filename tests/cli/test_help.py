@@ -106,7 +106,6 @@ def test_cross_org_commands_still_offer_all() -> None:
     ],
 )
 def test_node_commands_say_the_org_is_looked_up(command: tuple[str, str]) -> None:
-    """Their `--org` is a check, and the `orgs use` default does not reach them."""
+    """Their `--org` is a check: the node says which org it is in."""
     text = _help(*command)
     assert "Looked up from the node" in text
-    assert "`yertle orgs use` does not apply" in text

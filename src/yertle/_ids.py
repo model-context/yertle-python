@@ -60,6 +60,6 @@ def wire_node_id(node_id: str) -> str:
     """Return `node_id` ready for a path, raising `ValueError` if it is not an id.
 
     The same rule as `wire_org_id`. Where the backend takes only a full id,
-    as the anonymous node lookup does, use `full_id` instead.
+    use `full_id` instead.
     """
     return wire_org_id(node_id)

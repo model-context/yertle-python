@@ -34,8 +34,8 @@ if an invariant genuinely needs to change, change it deliberately and say why.
 3. **The SRE agent's tools are read-only.** `settings.allow_writes` exists but no
    mutating tool ships. Adding one is a product decision, not a refactor.
    `YERTLE_READ_COMMANDS` allowlists **(noun, verb) pairs, never bare nouns** —
-   gating on the noun alone admits every verb under it, which is how `orgs use`
-   (a write) would have been waved through. Enforced by
+   gating on the noun alone admits every verb under it, which is how `orgs
+   create` (a write) would be waved through. Enforced by
    `test_allowlist_admits_no_write_commands`.
 4. **CLI commands call the SDK, not the generated wire layer.** Nothing under
    `cli/` imports `yertle_client.api.*`; it goes through `yertle.orgs`,

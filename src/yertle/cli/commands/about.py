@@ -46,19 +46,18 @@ services connect, and where things live.
 
   Commands that start from an organization resolve it in this order:
 
-      --org <id>  >  $YERTLE_ORG  >  yertle orgs use  >  every org
+      --org <id>  >  $YERTLE_ORG  >  every org
 
+  export YERTLE_ORG=<id>     Work in one org for the rest of the shell
   yertle orgs update <id>    Rename it, or change its description
-  yertle orgs use <id>       Set a default, so you stop typing --org
-  yertle orgs use all        Undo it
 
   Commands that can span organizations (nodes list, nodes tree) will do so
-  by default. Commands that cannot (nodes search, nodes create) ask you to
-  pick one.
+  by default. Commands that cannot (nodes search, nodes create) use your
+  only org if you belong to one, and otherwise ask you to pick.
 
   Commands that take a node id (nodes show, nodes delete, branches, prs)
-  need no org: they look it up from the node. `orgs use` does not apply to
-  them, and an --org or $YERTLE_ORG that is not the node's org is an error.
+  need no org: they look it up from the node. An --org or $YERTLE_ORG that
+  is not the node's org is an error.
 
 [bold]Starting from nothing[/bold]
 

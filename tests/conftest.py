@@ -37,10 +37,10 @@ def isolate_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Point config and credential env vars somewhere the test owns.
 
     Without this the suite reads `~/.yertle/config.json`, so results depend on
-    whether the developer happens to have run `yertle login` or `yertle orgs
-    use`. That is not hypothetical: after `orgs use` landed, three tree tests
-    began failing locally and passing in CI, purely because CI has no config
-    file and a laptop does.
+    whether the developer happens to have run `yertle login` (or, before it
+    was removed, `yertle orgs use`). That is not hypothetical: after `orgs
+    use` landed, three tree tests began failing locally and passing in CI,
+    purely because CI has no config file and a laptop does.
 
     Tests that need a specific value still set it — `monkeypatch` applies in
     order, so a later `setenv`/`setattr` in a test overrides this.
