@@ -19,11 +19,14 @@ File access stays in `shared/auth.py` — this module never touches
 """
 
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Annotated
+from http import HTTPStatus
+from typing import Annotated, TypeVar
 from uuid import UUID
 
 import typer
+from yertle_client.errors import UnexpectedStatus
 
 import yertle
 from yertle.cli._errors import api_errors, die
@@ -244,12 +247,60 @@ def anonymous() -> bool:
     Decided once per command, before any request. With a token the CLI keeps
     to the authenticated routes even for a public org, so a member always
     sees their own view of it (role, invite settings) rather than the public
-    one.
+    one. A signed-in caller who is not a member has no such view; for them,
+    `member_or_public()` falls back to the public routes.
     """
     try:
         return auth.resolve().token is None
     except auth.AuthError as exc:
         die(str(exc))
+
+
+T = TypeVar("T")
+
+#: Shown when `member_or_public()` fell back, so a signed-in caller knows why
+#: they got the public view (less than a member sees) and not their own.
+PUBLIC_FALLBACK_HINT = (
+    "Read through the public routes: you are signed in, but not a member of this organization."
+)
+
+
+def member_or_public(member: Callable[[], T], public: Callable[[], T]) -> tuple[T, bool]:
+    """Run a member read; only if the token is refused, run the public one.
+
+    Returns the result and whether it came from the public routes.
+
+    A signed-in caller who isn't a member of an org gets a 403 from its member
+    routes, even when the org is public and the same read works with no token
+    (#70). So on a 403, and only then, the public read is tried:
+
+    - it succeeds: the org is public, so return its public view;
+    - it 404s: the org isn't public (or doesn't exist), so re-raise the
+      original 403, and the caller sees exactly what they saw before.
+
+    Members never get a 403, so they keep their own view and pay nothing
+    extra. Call this inside `api_errors()`: any failure that escapes is a
+    member-route failure, and is explained as one.
+    """
+    try:
+        return member(), False
+    except UnexpectedStatus as refused:
+        if refused.status_code != HTTPStatus.FORBIDDEN:
+            raise
+        try:
+            return public(), True
+        except UnexpectedStatus as public_failure:
+            if public_failure.status_code == HTTPStatus.NOT_FOUND:
+                raise refused from None
+            raise
+
+
+def public_fallback_hint() -> None:
+    """Say on stderr that a read fell back to the public routes.
+
+    stderr, so `--format json` output stays exactly the JSON.
+    """
+    typer.secho(PUBLIC_FALLBACK_HINT, dim=True, err=True)
 
 
 def resolve_public_org(override: str | None) -> str:
@@ -272,12 +323,15 @@ def resolve_public_org(override: str | None) -> str:
 __all__ = [
     "ALL_ORGS",
     "ORG_ENV_VAR",
+    "PUBLIC_FALLBACK_HINT",
     "NodeOrgOption",
     "OrgOption",
     "ResolvedOrg",
     "SingleOrgOption",
     "anonymous",
     "explicit_node_org",
+    "member_or_public",
+    "public_fallback_hint",
     "resolve_node_org",
     "resolve_one_org",
     "resolve_org",
